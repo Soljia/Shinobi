@@ -10,3 +10,6 @@ super.json
 dbdata
 npm-debug.log
 shinobi.sqlite
+ffmpeg/ffmpeg.exe
+.vscode/settings.json
+package-lock.json

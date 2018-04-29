@@ -1,0 +1,59 @@
+{
+    "port": 8080,
+    "addStorage": [
+        { "name": "second", "path": "__DIR__/videos2" }
+    ],
+    "db": {
+        "host": "127.0.0.1",
+        "user": "majesticflame",
+        "password": "",
+        "database": "ccio",
+        "port": 3306
+    },
+    "mail": {
+        "service": "gmail",
+        "auth": {
+            "user": "your_email@gmail.com",
+            "pass": "your_password_or_app_specific_password"
+        }
+    },
+    "cpuUsageMarker": "%Cpu",
+    "customCpuCommand": null,
+    "autoDropCache": "true",
+    "doSnapshot": "true",
+    "restart": "{}",
+    "systemLog": "true",
+    "deleteCorruptFiles": "true",
+    "restart.onVideoNotExist": "true",
+    "cron": "{}",
+    "cron.enabled": "true",
+    "cron.deleteOld": "true",
+    "cron.deleteOrphans": "false",
+    "cron.deleteNoVideo": "true",
+    "cron.deleteNoVideoRecursion": "false",
+    "cron.deleteOverMax": "true",
+    "cron.deleteOverMaxOffset": "0.9",
+    "cron.deleteLogs": "true",
+    "cron.deleteEvents": "true",
+    "cron.deleteFileBins": "true",
+    "cron.interval": "1",
+    "databaseType": "mysql",
+    "pluginKeys": "{}",
+    "databaseLogs": "false",
+    "pipeAddition": "parseInt(config.pipeAddition)",
+    "webPaths": "{} ",
+    "webPaths.index": "/",
+    "webPaths.super": "/super",
+    "webPaths.admin": "/admin",
+    "renderPaths": "{} ",
+    "renderPaths.index": "pages/index",
+    "renderPaths.home": "pages/home",
+    "renderPaths.admin": "pages/admin",
+    "renderPaths.super": "pages/super",
+    "renderPaths.factorAuth": "pages/factor",
+    "renderPaths.streamer": "pages/streamer",
+    "renderPaths.dashcam": "pages/dashcam",
+    "renderPaths.embed": "pages/embed",
+    "renderPaths.mjpeg": "pages/mjpeg",
+    "renderPaths.grid": "pages/grid"
+}

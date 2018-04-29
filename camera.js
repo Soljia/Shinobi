@@ -31,13 +31,6 @@ var path = require('path');
 var mysql = require('mysql');
 var moment = require('moment');
 var request = require("request");
-//var express = require('express');
-/*var app = express();
-var appHTTPS = express();
-var http = require('http');
-var https = require('https');
-var server = http.createServer(app);
-var bodyParser = require('body-parser');*/
 var CircularJSON = require('circular-json');
 var ejs = require('ejs');
 var io = new(require('socket.io'))();
@@ -57,10 +50,17 @@ var PamDiff = require('pam-diff');
 var location = {}
 location.super = __dirname + '/super.json'
 location.config = __dirname + '/conf.json'
+location.config_default = __dirname + '/conf.default.json'
 location.languages = __dirname + '/languages'
 location.definitions = __dirname + '/definitions'
 location.basedir = __dirname;
-var config = require(location.config);
+var importedConfig = require(location.config);
+let defaultConfig = require(location.config_default);
+let config = Object.assign({}, defaultConfig, importedConfig)
+
+
+if (config.ip === undefined || config.ip === '' || config.ip.indexOf('0.0.0.0') > -1) { config.ip = 'localhost' } else { config.bindip = config.ip };
+
 if (!config.productType) {
     config.productType = 'CE'
 }
@@ -88,63 +88,6 @@ process.send = process.send || function() {};
 if (config.mail) {
     var nodemailer = require('nodemailer').createTransport(config.mail);
 }
-//config defaults
-if (config.cpuUsageMarker === undefined) { config.cpuUsageMarker = '%Cpu' }
-if (config.customCpuCommand === undefined) { config.customCpuCommand = null }
-if (config.autoDropCache === undefined) { config.autoDropCache = true }
-if (config.doSnapshot === undefined) { config.doSnapshot = true }
-if (config.restart === undefined) { config.restart = {} }
-if (config.systemLog === undefined) { config.systemLog = true }
-if (config.deleteCorruptFiles === undefined) { config.deleteCorruptFiles = true }
-if (config.restart.onVideoNotExist === undefined) { config.restart.onVideoNotExist = true }
-if (config.ip === undefined || config.ip === '' || config.ip.indexOf('0.0.0.0') > -1) { config.ip = 'localhost' } else { config.bindip = config.ip };
-if (config.cron === undefined) config.cron = {};
-if (config.cron.enabled === undefined) config.cron.enabled = true;
-if (config.cron.deleteOld === undefined) config.cron.deleteOld = true;
-if (config.cron.deleteOrphans === undefined) config.cron.deleteOrphans = false;
-if (config.cron.deleteNoVideo === undefined) config.cron.deleteNoVideo = true;
-if (config.cron.deleteNoVideoRecursion === undefined) config.cron.deleteNoVideoRecursion = false;
-if (config.cron.deleteOverMax === undefined) config.cron.deleteOverMax = true;
-if (config.cron.deleteOverMaxOffset === undefined) config.cron.deleteOverMaxOffset = 0.9;
-if (config.cron.deleteLogs === undefined) config.cron.deleteLogs = true;
-if (config.cron.deleteEvents === undefined) config.cron.deleteEvents = true;
-if (config.cron.deleteFileBins === undefined) config.cron.deleteFileBins = true;
-if (config.cron.interval === undefined) config.cron.interval = 1;
-if (config.databaseType === undefined) { config.databaseType = 'mysql' }
-if (config.pluginKeys === undefined) config.pluginKeys = {};
-if (config.databaseLogs === undefined) { config.databaseLogs = false }
-if (config.pipeAddition === undefined) { config.pipeAddition = 7 } else { config.pipeAddition = parseInt(config.pipeAddition) }
-//Web Paths
-if (config.webPaths === undefined) { config.webPaths = {} }
-//main access URI
-if (config.webPaths.home === undefined) { config.webPaths.index = '/' }
-//Super User URI
-if (config.webPaths.super === undefined) { config.webPaths.super = '/super' }
-//Admin URI
-if (config.webPaths.admin === undefined) { config.webPaths.admin = '/admin' }
-//Page Rander Paths
-if (config.renderPaths === undefined) { config.renderPaths = {} }
-//login page
-if (config.renderPaths.index === undefined) { config.renderPaths.index = 'pages/index' }
-//dashboard page
-if (config.renderPaths.home === undefined) { config.renderPaths.home = 'pages/home' }
-//sub-account administration page
-if (config.renderPaths.admin === undefined) { config.renderPaths.admin = 'pages/admin' }
-//superuser page
-if (config.renderPaths.super === undefined) { config.renderPaths.super = 'pages/super' }
-//2-Factor Auth page
-if (config.renderPaths.factorAuth === undefined) { config.renderPaths.factorAuth = 'pages/factor' }
-//Streamer (Dashbcam Prototype) page
-if (config.renderPaths.streamer === undefined) { config.renderPaths.streamer = 'pages/streamer' }
-//Streamer v2 (Dashbcam) page
-if (config.renderPaths.dashcam === undefined) { config.renderPaths.dashcam = 'pages/dashcam' }
-//embeddable widget page
-if (config.renderPaths.embed === undefined) { config.renderPaths.embed = 'pages/embed' }
-//mjpeg full screen page
-if (config.renderPaths.mjpeg === undefined) { config.renderPaths.mjpeg = 'pages/mjpeg' }
-//gridstack only page
-if (config.renderPaths.grid === undefined) { config.renderPaths.grid = 'pages/grid' }
-
 s = { factorAuth: {}, child_help: false, totalmem: os.totalmem(), platform: os.platform(), s: JSON.stringify, isWin: (process.platform === 'win32') };
 s.__basedir = __dirname;
 var misc = require('./js/misc')({ s: s, config: config, io: io });
@@ -241,31 +184,26 @@ if (!config.videosDir) { config.videosDir = __dirname + '/videos/' }
 if (!config.binDir) { config.binDir = __dirname + '/fileBin/' }
 if (!config.addStorage) { config.addStorage = [] }
 s.dir = {
-    videos: misc.checkCorrectPathEnding(config.videosDir),
-    streams: misc.checkCorrectPathEnding(config.streamDir),
-    fileBin: misc.checkCorrectPathEnding(config.binDir),
-    addStorage: config.addStorage,
+    videos: misc.checkCorrectPathEnding(config.videosDir, __dirname),
+    streams: misc.checkCorrectPathEnding(config.streamDir, __dirname),
+    fileBin: misc.checkCorrectPathEnding(config.binDir, __dirname),
+    addStorage: config.addStorage.map((dir) => { return {name: dir.name, path: misc.checkCorrectPathEnding(dir.path, __dirname)}}),
     languages: location.languages + '/'
 };
-//streams dir
-if (!fs.existsSync(s.dir.streams)) {
-    fs.mkdirSync(s.dir.streams);
-}
-//videos dir
-if (!fs.existsSync(s.dir.videos)) {
-    fs.mkdirSync(s.dir.videos);
-}
-//fileBin dir
-if (!fs.existsSync(s.dir.fileBin)) {
-    fs.mkdirSync(s.dir.fileBin);
-}
-//additional storage areas
-s.dir.addStorage.forEach(function(v, n) {
-        v.path = misc.checkCorrectPathEnding(v.path)
-        if (!fs.existsSync(v.path)) {
-            fs.mkdirSync(v.path);
-        }
+
+let dirCheck = (dirs) => {
+    let dirs_;
+    if(!Array.isArray(dirs)) dirs_ = Object.keys(dirs).map((k) => dirs[k])
+    else dirs_ = dirs;
+
+    dirs_.forEach((dir) => {
+        if (Array.isArray(dir)) dirCheck(dir)
+        else if (dir.path && !fs.existsSync(dir.path)) fs.mkdirSync(dir.path)
+        else if (!fs.existsSync(dir)) fs.mkdirSync(dir)
     })
+}
+
+dirCheck(s.dir);
     ////Camera Controller
 s.init = function(x, e, k, fn) {
     if (!e) { e = {} }
