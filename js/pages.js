@@ -91,9 +91,9 @@ module.exports = function(vars) {
         //super page
         app.get('/super', function(req, res) {
             var ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-            if(!misc.ipInConfig(ip,config.allowedIPs)){
+            if (!misc.ipInConfig(ip, config.allowedIPs)) {
                 res.redirect('/');
-            } else{
+            } else {
                 res.render('index', { lang: lang, config: config, screen: 'super' }, function(err, html) {
                     if (err) {
                         logging.systemLog(err)

@@ -706,9 +706,11 @@ module.exports = function(s, config, misc) {
         if (e.details.stream_channels) {
             times += e.details.stream_channels.length
         }
+        console.log(parseInt(times));
         for (var i = 0; i < times; i++) {
             x.stdioPipes.push('pipe')
         }
+        console.log(x)
         x.ffmpegCommandString = module.split(x.ffmpegCommandString.replace(/\s+/g, ' ').trim())
         return spawn(config.ffmpegDir, x.ffmpegCommandString, { detached: true, stdio: x.stdioPipes });
     }

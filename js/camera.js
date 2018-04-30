@@ -732,7 +732,6 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
                                             }
                                             s.group[e.ke].mon[e.id].spawn.stdio[3].pipe(s.group[e.ke].mon[e.id].p2p).pipe(s.group[e.ke].mon[e.id].pamDiff);
                                         } else {
-                                            console.log(s.group[e.ke].mon[e.id].spawn);
                                             s.group[e.ke].mon[e.id].spawn.stdio[3].on('data', function(d) {
                                                 if (s.ocv && e.details.detector === '1' && e.details.detector_send_frames === '1') {
 

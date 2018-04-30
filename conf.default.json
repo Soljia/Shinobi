@@ -42,7 +42,7 @@
     "databaseType": "mysql",
     "pluginKeys": "{}",
     "databaseLogs": "false",
-    "pipeAddition": "parseInt(config.pipeAddition)",
+    "pipeAddition": "7",
     "webPaths": "{} ",
     "webPaths.index": "/",
     "webPaths.super": "/super",
