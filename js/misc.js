@@ -77,8 +77,11 @@ module.exports = function(vars) {
             }
         }
         //load camera controller vars
-    module.nameToTime = function(x) { x = x.split('.')[0].split('T'), x[1] = x[1].replace(/-/g, ':');
-        x = x.join(' '); return x; }
+    module.nameToTime = function(x) {
+        x = x.split('.')[0].split('T'), x[1] = x[1].replace(/-/g, ':');
+        x = x.join(' ');
+        return x;
+    }
     module.ratio = function(width, height, ratio) { ratio = width / height; return (Math.abs(ratio - 4 / 3) < Math.abs(ratio - 16 / 9)) ? '4:3' : '16:9'; }
     module.randomNumber = function(x) {
         if (!x) { x = 10 };
@@ -223,8 +226,10 @@ module.exports = function(vars) {
                     p = x.pid;
                     if (group.mon_conf[id].type === ('dashcam' || 'socket' || 'jpeg' || 'pipe')) {
                         x.stdin.pause();
-                        setTimeout(function() { x.kill('SIGTERM');
-                            delete(x); }, 500)
+                        setTimeout(function() {
+                            x.kill('SIGTERM');
+                            delete(x);
+                        }, 500)
                     } else {
                         try {
                             x.stdin.setEncoding('utf8');
@@ -257,16 +262,25 @@ module.exports = function(vars) {
         }
     }
 
-    module.ipInConfig = function (ip, config){
-        //let re = /\b((?:\d{1,3}\.){3}\d{1,3})(\/\d{1,2})?\b/g;
-        let addr = ipaddr.parse(ip);
+    module.ipInConfig = function(ip, config) {
+        // Default to a false return
         let result = false;
-        console.log(config)
+
+        // Check ip passed is valid
+        if (!ipaddr.isValid(ip)) return result;
+
+        // Parse IP so addr.js can use
+        let addr = ipaddr.parse(ip);
+
+        // Itterate through defined IPs and Subnets
         config.forEach(value => {
-            if(addr.match(value,32)) result = true;
+            // IP Match
+            if (addr.match(value, 32) || addr.match(value, 32)) result = true;
+            // Subnet Match
             else if (addr.match(ipaddr.parseCIDR(value))) result = true;
         })
-        console.log(ip)
+
+        //Return result
         return result;
     }
 
