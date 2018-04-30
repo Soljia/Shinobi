@@ -13,6 +13,7 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
     module.camera = function(x, e, cn) {
         if (x !== 'motion') {
             var ee = s.init('noReference', e);
+
             if (!e) { e = {} };
             if (cn && cn.ke && !e.ke) { e.ke = cn.ke };
             if (!e.mode) { e.mode = x; }
@@ -53,66 +54,176 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
                 } else {
                     e.base = monitorConfig.details.control_base_url;
                 }
-                if (!monitorConfig.details.control_url_stop_timeout || monitorConfig.details.control_url_stop_timeout === '') { monitorConfig.details.control_url_stop_timeout = 1000 }
-                if (!monitorConfig.details.control_url_method || monitorConfig.details.control_url_method === '') { monitorConfig.details.control_url_method = "GET" }
-                var setURL = function(url) {
-                    e.URLobject = URL.parse(url)
-                    if (!e.URLobject.port) { e.URLobject.port = 80 }
-                    e.options = {
-                        host: e.URLobject.hostname,
-                        port: e.URLobject.port,
-                        method: monitorConfig.details.control_url_method,
-                        path: e.URLobject.pathname,
-                    };
-                    if (e.URLobject.query) {
-                        e.options.path = e.options.path + '?' + e.URLobject.query
-                    }
-                    if (e.URLobject.username && e.URLobject.password) {
-                        e.options.auth = e.URLobject.username + ':' + e.URLobject.password
-                    }
-                    if (e.URLobject.auth) {
-                        e.options.auth = e.URLobject.auth
-                    }
+                if (!monitorConfig.details.control_url_stop_timeout || monitorConfig.details.control_url_stop_timeout === '') {
+                    monitorConfig.details.control_url_stop_timeout = 1000
                 }
-                setURL(e.base + monitorConfig.details['control_url_' + e.direction])
-                http.request(e.options, function(first) {
-                    var body = '';
-                    var msg;
-                    first.on('data', function(chunk) {
-                        body += chunk
-                    });
-                    first.on('end', function() {
-                        if (monitorConfig.details.control_stop == '1' && e.direction !== 'center') {
-                            logging.log(e, { type: 'Control Triggered Started', msg: body });
-                            setURL(e.base + monitorConfig.details['control_url_' + e.direction + '_stop'])
-                            setTimeout(function() {
-                                http.request(e.options, function(data) {
-                                    var body = ''
-                                    data.on('data', function(chunk) {
-                                        body += chunk
-                                    })
-                                    data.on('end', function() {
-                                        msg = { ok: true, type: 'Control Trigger Ended' };
-                                        cn(msg)
-                                        logging.log(e, msg);
-                                    });
-                                }).on('error', function(err) {
-                                    msg = { ok: false, type: 'Control Error', msg: err };
+                if (!monitorConfig.details.control_url_method || monitorConfig.details.control_url_method === '') { monitorConfig.details.control_url_method = "GET" }
+                var buildOptionsFromUrl = function(url) {
+                    URLobject = URL.parse(url)
+                    if (monitorConfig.details.control_url_method === 'ONVIF' && monitorConfig.details.control_base_url === '') {
+                        URLobject.port = 8000
+                    } else if (!URLobject.port) {
+                        URLobject.port = 80
+                    }
+                    options = {
+                        host: URLobject.hostname,
+                        port: URLobject.port,
+                        method: monitorConfig.details.control_url_method,
+                        path: URLobject.pathname,
+                    };
+                    if (URLobject.query) {
+                        options.path = options.path + '?' + URLobject.query
+                    }
+                    if (URLobject.username && URLobject.password) {
+                        options.username = URLobject.username
+                        options.password = URLobject.password
+                        options.auth = URLobject.username + ':' + URLobject.password
+                    } else if (URLobject.auth) {
+                        var auth = URLobject.auth.split(':')
+                        options.auth = URLobject.auth
+                        options.username = auth[0]
+                        options.password = auth[1]
+                    }
+                    return options
+                }
+                var controlURL = e.base + monitorConfig.details['control_url_' + e.direction]
+                var controlURLOptions = buildOptionsFromUrl(controlURL)
+                if (monitorConfig.details.control_url_stop_timeout === '0' && monitorConfig.details.control_stop === '1' && s.group[e.ke].mon[e.id].ptzMoving === true) {
+                    e.direction = 'stopMove'
+                    s.group[e.ke].mon[e.id].ptzMoving = false
+                } else {
+                    s.group[e.ke].mon[e.id].ptzMoving = true
+                }
+                if (monitorConfig.details.control_url_method === 'ONVIF') {
+                    try {
+                        var move = function(onvifConnection) {
+                            var Camera = onvifConnection;
+                            switch (e.direction) {
+                                case 'center':
+                                    //                                Camera.gotoHomePosition()
+                                    msg = { type: 'Center button inactive' }
+                                    logging.log(e, msg)
                                     cn(msg)
-                                    logging.log(e, msg);
-                                }).end();
-                            }, monitorConfig.details.control_url_stop_timeout)
+                                    break;
+                                case 'stopMove':
+                                    msg = { type: 'Control Trigger Ended' }
+                                    logging.log(e, msg)
+                                    cn(msg)
+                                    Camera.stop()
+                                    break;
+                                default:
+                                    var controlOptions = {}
+                                    var onvifDirections = {
+                                        "left": [-1, 'x'],
+                                        "right": [1, 'x'],
+                                        "down": [-1, 'y'],
+                                        "up": [1, 'y'],
+                                        "zoom_in": [1, 'zoom'],
+                                        "zoom_out": [-1, 'zoom']
+                                    }
+                                    var direction = onvifDirections[e.direction]
+                                    controlOptions[direction[1]] = direction[0]
+                                    if (monitorConfig.details.control_stop == '1') {
+                                        Camera.continuousMove(controlOptions, function(err) {
+                                            logging.log(e, { type: 'Control Trigger Started' });
+                                            if (monitorConfig.details.control_url_stop_timeout !== '0') {
+                                                setTimeout(function() {
+                                                    msg = { type: 'Control Trigger Ended' }
+                                                    logging.log(e, msg)
+                                                    cn(msg)
+                                                    Camera.stop()
+                                                }, monitorConfig.details.control_url_stop_timeout)
+                                            }
+                                        })
+                                    } else {
+                                        Camera.absoluteMove(controlOptions, function(err) {
+                                            msg = { type: 'Control Triggered' }
+                                            logging.log(e, msg);
+                                            cn(msg)
+                                        })
+                                    }
+                                    break;
+                            }
+                        }
+                        if (!s.group[e.ke].mon[e.id].onvifConnection) {
+                            s.group[e.ke].mon[e.id].onvifConnection = new Cam({
+                                hostname: controlURLOptions.host,
+                                port: controlURLOptions.port,
+                                username: controlURLOptions.username,
+                                password: controlURLOptions.password
+                            }, function(err) {
+                                move(this)
+                            })
                         } else {
-                            msg = { ok: true, type: 'Control Triggered', msg: body };
+                            move(s.group[e.ke].mon[e.id].onvifConnection)
+                        }
+                    } catch (err) {
+                        delete(s.group[e.ke].mon[e.id].onvifConnection)
+                        msg = { type: lang['Control Error'], msg: { msg: lang.ControlErrorText2, error: err, options: controlURLOptions, direction: e.direction } }
+                        logging.log(e, msg)
+                        cn(msg)
+                    }
+                } else {
+                    var stopCamera = function() {
+                        var stopURL = e.base + monitorConfig.details['control_url_' + e.direction + '_stop']
+                        var options = buildOptionsFromUrl(stopURL)
+                        var requestOptions = {
+                            url: stopURL,
+                            method: options.method,
+                            auth: {
+                                user: options.username,
+                                pass: options.password
+                            }
+                        }
+                        if (monitorConfig.details.control_digest_auth === '1') {
+                            requestOptions.sendImmediately = true
+                        }
+                        request(requestOptions, function(err, data) {
+                            if (err) {
+                                msg = { ok: false, type: 'Control Error', msg: err }
+                            } else {
+                                msg = { ok: true, type: 'Control Trigger Ended' }
+                            }
                             cn(msg)
                             logging.log(e, msg);
+                        })
+                    }
+                    if (e.direction === 'stopMove') {
+                        stopCamera()
+                    } else {
+                        var requestOptions = {
+                            url: controlURL,
+                            method: controlURLOptions.method,
+                            auth: {
+                                user: controlURLOptions.username,
+                                pass: controlURLOptions.password
+                            }
                         }
-                    });
-                }).on('error', function(err) {
-                    msg = { ok: false, type: 'Control Error', msg: err };
-                    cn(msg)
-                    logging.log(e, msg);
-                }).end();
+                        if (monitorConfig.details.control_digest_auth === '1') {
+                            requestOptions.sendImmediately = true
+                        }
+                        request(requestOptions, function(err, data) {
+                            if (err) {
+                                msg = { ok: false, type: 'Control Error', msg: err };
+                                cn(msg)
+                                logging.log(e, msg);
+                                return
+                            }
+                            if (monitorConfig.details.control_stop == '1' && e.direction !== 'center') {
+                                logging.log(e, { type: 'Control Triggered Started' });
+                                if (monitorConfig.details.control_url_stop_timeout > 0) {
+                                    setTimeout(function() {
+                                        stopCamera()
+                                    }, monitorConfig.details.control_url_stop_timeout)
+                                }
+                            } else {
+                                msg = { ok: true, type: 'Control Triggered' };
+                                cn(msg)
+                                logging.log(e, msg);
+                            }
+                        })
+                    }
+                }
                 break;
             case 'snapshot': //get snapshot from monitor URL
                 if (config.doSnapshot === true) {
@@ -173,7 +284,7 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
                 if (!cn.monitor_watching[e.id]) { cn.monitor_watching[e.id] = { ke: e.ke } }
                 s.group[e.ke].mon[e.id].watch[cn.id] = {};
                 //            if(Object.keys(s.group[e.ke].mon[e.id].watch).length>0){
-                //                s.sqlQuery('SELECT * FROM Monitors WHERE ke=? AND mid=?',[e.ke,e.id],function(err,r) {
+                //                sql.query('SELECT * FROM Monitors WHERE ke=? AND mid=?',[e.ke,e.id],function(err,r) {
                 //                    if(r&&r[0]){
                 //                        r=r[0];
                 //                        r.url=s.init('url',r);
@@ -183,9 +294,7 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
                 //            }
                 break;
             case 'watch_off': //live streamers - leave
-                if (cn.monitor_watching) {
-                    delete(cn.monitor_watching[e.id])
-                }
+                if (cn.monitor_watching) { delete(cn.monitor_watching[e.id]) }
                 if (s.group[e.ke].mon[e.id] && s.group[e.ke].mon[e.id].watch) {
                     delete(s.group[e.ke].mon[e.id].watch[cn.id]), e.ob = Object.keys(s.group[e.ke].mon[e.id].watch).length
                     if (e.ob === 0) {
@@ -194,9 +303,7 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
                 } else {
                     e.ob = 0;
                 }
-                if (misc.tx) {
-                    misc.tx({ f: 'monitor_watch_off', ke: e.ke, id: e.id, cnid: cn.id })
-                };
+                if (tx) { tx({ f: 'monitor_watch_off', ke: e.ke, id: e.id, cnid: cn.id }) };
                 misc.tx({ viewers: e.ob, ke: e.ke, id: e.id }, 'MON_' + e.id);
                 break;
             case 'restart': //restart monitor
@@ -211,7 +318,7 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
                 if (s.group[e.ke].mon[e.id].eventBasedRecording.process) {
                     clearTimeout(s.group[e.ke].mon[e.id].eventBasedRecording.timeout)
                     s.group[e.ke].mon[e.id].eventBasedRecording.allowEnd = true;
-                    s.group[e.ke].mon[e.id].eventBasedRecording.process.kill('SIGTERM');
+                    s.group[e.ke].mon[e.id].eventBasedRecording.procesmisc.kill('SIGTERM');
                 }
                 if (s.group[e.ke].mon[e.id].fswatch) {
                     s.group[e.ke].mon[e.id].fswatch.close();
@@ -221,13 +328,9 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
                     s.group[e.ke].mon[e.id].fswatchStream.close();
                     delete(s.group[e.ke].mon[e.id].fswatchStream)
                 }
-                if (s.group[e.ke].mon[e.id].open) {
-                    ee.filename = s.group[e.ke].mon[e.id].open, ee.ext = s.group[e.ke].mon[e.id].open_ext;
-                    s.video('close', ee)
-                }
                 if (s.group[e.ke].mon[e.id].last_frame) { delete(s.group[e.ke].mon[e.id].last_frame) }
                 if (s.group[e.ke].mon[e.id].started !== 1) { return }
-                misc.kill(s.group[e.ke].mon[e.id].spawn, s.group[e.ke]);
+                misc.kill(s.group[e.ke].mon[e.id].spawn, e);
                 if (e.neglectTriggerTimer === 1) {
                     delete(e.neglectTriggerTimer);
                 } else {
@@ -261,18 +364,13 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
                 if (!s.group[e.ke].mon_conf[e.id]) { s.group[e.ke].mon_conf[e.id] = s.init('noReference', e); }
                 e.url = s.init('url', e);
                 if (s.group[e.ke].mon[e.id].started === 1) { return }
-                if (x === 'start' && e.details.detector_trigger == '1') {
+                if (e.details.detector_trigger == '1') {
                     s.group[e.ke].mon[e.id].motion_lock = setTimeout(function() {
                         clearTimeout(s.group[e.ke].mon[e.id].motion_lock);
                         delete(s.group[e.ke].mon[e.id].motion_lock);
                     }, 30000)
                 }
                 s.group[e.ke].mon[e.id].started = 1;
-                s.group[e.ke].mon[e.id].closeVideo = function() {
-                    if (s.group[e.ke].mon[e.id].open) {
-                        s.video('close', e);
-                    }
-                };
                 if (x === 'record') {
                     s.group[e.ke].mon[e.id].record.yes = 1;
                 } else {
@@ -319,7 +417,7 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
                         e.details.detector_notrigger_timeout = 10
                     }
                     e.detector_notrigger_timeout = parseFloat(e.details.detector_notrigger_timeout) * 1000 * 60;
-                    s.sqlQuery('SELECT mail FROM Users WHERE ke=? AND details NOT LIKE ?', [e.ke, '%"sub"%'], function(err, r) {
+                    sql.query('SELECT mail FROM Users WHERE ke=? AND details NOT LIKE ?', [e.ke, '%"sub"%'], function(err, r) {
                         r = r[0];
                         s.group[e.ke].mon[e.id].detector_notrigger_timeout_function = function() {
                             if (config.mail && e.details.detector_notrigger_mail == '1') {
@@ -357,64 +455,34 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
                         }
                     }, 60000 * 1);
                 }
-                if (x === 'record' || (x === 'start' && e.details.detector_record_method === 'sip')) {
-                    var pathToName = function(filePath) {
-                        var split = filePath.split('/');
-                        return split[split.length - 1]
-                    }
-                    s.group[e.ke].mon[e.id].fswatch = chokidar.watch(e.dir, { ignored: /(^|[\/\\])\../, ignoreInitial: true }).on('all', (event, filePath) => {
-                        var filename = pathToName(filePath)
-                        if (s.group[e.ke].mon[e.id].fixingVideos[filename]) { return }
+                if (s.platform !== 'darwin' && (x === 'record' || (x === 'start' && e.details.detector_record_method === 'sip'))) {
+                    //check if ffmpeg is recording
+                    s.group[e.ke].mon[e.id].fswatch = fs.watch(e.dir, { encoding: 'utf8' }, (event, filename) => {
                         switch (event) {
                             case 'change':
-                                var filename = pathToName(filePath)
-                                if (s.platform !== 'darwin') {
-                                    if (s.group[e.ke].mon[e.id].fixingVideos[filename]) { return }
-                                    clearTimeout(s.group[e.ke].mon[e.id].checker)
-                                    clearTimeout(s.group[e.ke].mon[e.id].checkStream)
-                                    s.group[e.ke].mon[e.id].checker = setTimeout(function() {
-                                        if (s.group[e.ke].mon[e.id].started === 1) {
-                                            e.fn();
-                                            logging.log(e, { type: lang['Camera is not recording'], msg: { msg: lang['Restarting Process'] } });
-                                        }
-                                    }, 60000 * 2);
-                                }
-                                break;
-                            case 'add':
-                                if (s.group[e.ke].mon[e.id].open) {
-                                    s.video('close', e);
-                                    var row = Object.assign({}, s.init('noReference', e));
-                                    setTimeout(function() {
-                                        if (row.details.detector === '1' && s.group[row.ke].mon[row.id].started === 1 && row.details && row.details.detector_record_method === 'del' && row.details.detector_delete_motionless_videos === '1' && s.group[row.ke].mon[row.id].detector_motion_count === 0) {
-                                            if (row.details.loglevel !== 'quiet') {
-                                                logging.log(row, { type: lang['Delete Motionless Video'], msg: row.filename + '.' + row.ext });
-                                            }
-                                            s.video('delete', row)
-                                        }
-                                    }, 2000)
-                                }
-                                e.filename = filename.split('.')[0];
-                                s.video('open', e);
-                                s.group[e.ke].mon[e.id].open = e.filename;
-                                s.group[e.ke].mon[e.id].open_ext = e.ext;
-                                s.group[e.ke].mon[e.id].detector_motion_count = 0;
+                                clearTimeout(s.group[e.ke].mon[e.id].checker)
+                                clearTimeout(s.group[e.ke].mon[e.id].checkStream)
+                                s.group[e.ke].mon[e.id].checker = setTimeout(function() {
+                                    if (s.group[e.ke].mon[e.id].started === 1) {
+                                        e.fn();
+                                        logging.log(e, { type: lang['Camera is not recording'], msg: { msg: lang['Restarting Process'] } });
+                                    }
+                                }, 60000 * e.cutoff * 1.1);
                                 break;
                         }
                     });
                 }
-                switch (x) {
-                    case 'start':
-                        switch (e.details.stream_type) {
-                            case 'jpeg':
-                            case 'hls':
-                                if (s.platform !== 'darwin') {
-                                    s.group[e.ke].mon[e.id].fswatchStream = chokidar.watch(e.sdir, { ignored: /(^|[\/\\])\../, ignoreInitial: true }).on('all', (event, filePath) => {
-                                        resetStreamCheck()
-                                    })
-                                }
-                                break;
-                        }
-                        break;
+                if (
+                    //is MacOS
+                    s.platform !== 'darwin' &&
+                    //is Watch-Only or Record
+                    (x === 'start' || x === 'record') &&
+                    //if JPEG API enabled or Stream Type is HLS
+                    (e.details.stream_type === 'jpeg' || e.details.stream_type === 'hls' || e.details.snap === '1')
+                ) {
+                    s.group[e.ke].mon[e.id].fswatchStream = fs.watch(e.sdir, { encoding: 'utf8' }, () => {
+                        resetStreamCheck()
+                    })
                 }
                 module.camera('snapshot', { mid: e.id, ke: e.ke, mon: e })
                     //check host to see if has password and user in it
@@ -450,11 +518,11 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
                                     e.frames = 0;
                                     if (!s.group[e.ke].mon[e.id].record) { s.group[e.ke].mon[e.id].record = { yes: 1 } };
                                     //launch ffmpeg (main)
-                                    s.group[e.ke].mon[e.id].spawn = ffmpeg.ffmpeg(e); //s.ffmpeg(e);
+                                    s.group[e.ke].mon[e.id].spawn = ffmpeg.ffmpeg(e);
                                     //on unexpected exit restart
                                     s.group[e.ke].mon[e.id].spawn_exit = function() {
                                         if (s.group[e.ke].mon[e.id].started === 1) {
-                                            if (e.details.loglevel !== 'quiet') {
+                                            if (e.detaillogging.loglevel !== 'quiet') {
                                                 logging.log(e, { type: lang['Process Unexpected Exit'], msg: { msg: lang['Process Crashed for Monitor'] + ' : ' + e.id, cmd: s.group[e.ke].mon[e.id].ffmpeg } });
                                             }
                                             e.error_fatal();
@@ -481,12 +549,12 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
                                     //start workers
                                     if (e.type === 'jpeg') {
                                         if (!e.details.sfps || e.details.sfps === '') {
-                                            e.details.sfps = parseFloat(e.details.sfps);
-                                            if (isNaN(e.details.sfps)) { e.details.sfps = 1 }
+                                            var capture_fps = parseFloat(e.details.sfps);
+                                            if (isNaN(capture_fps)) { capture_fps = 1 }
                                         }
                                         if (s.group[e.ke].mon[e.id].spawn) {
                                             s.group[e.ke].mon[e.id].spawn.stdin.on('error', function(err) {
-                                                if (err && e.details.loglevel !== 'quiet') {
+                                                if (err && e.detaillogging.loglevel !== 'quiet') {
                                                     logging.log(e, { type: 'STDIN ERROR', msg: err });
                                                 }
                                             })
@@ -516,7 +584,7 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
                                                     if (s.group[e.ke].mon[e.id].started === 1) {
                                                         s.group[e.ke].mon[e.id].record.capturing = setTimeout(function() {
                                                             e.captureOne()
-                                                        }, 1000 / e.details.sfps);
+                                                        }, 1000 / capture_fps);
                                                     }
                                                     e.buffer0 = null;
                                                 }
@@ -531,7 +599,7 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
                                                 ++e.error_count;
                                                 clearTimeout(e.timeOut);
                                                 delete(e.timeOut);
-                                                if (e.details.loglevel !== 'quiet') {
+                                                if (e.detaillogging.loglevel !== 'quiet') {
                                                     logging.log(e, { type: lang['JPEG Error'], msg: { msg: lang.JPEGErrorText, info: err } });
                                                     switch (err.code) {
                                                         case 'ESOCKETTIMEDOUT':
@@ -664,10 +732,11 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
                                             }
                                             s.group[e.ke].mon[e.id].spawn.stdio[3].pipe(s.group[e.ke].mon[e.id].p2p).pipe(s.group[e.ke].mon[e.id].pamDiff);
                                         } else {
+                                            console.log(s.group[e.ke].mon[e.id].spawn);
                                             s.group[e.ke].mon[e.id].spawn.stdio[3].on('data', function(d) {
                                                 if (s.ocv && e.details.detector === '1' && e.details.detector_send_frames === '1') {
 
-                                                    misc.ocvmisc.tx({ f: 'frame', mon: s.group[e.ke].mon_conf[e.id].details, ke: e.ke, id: e.id, time: misc.moment(), frame: d }, s.group[e.ke].mon[e.id].detectorStreamTx);
+                                                    misc.ocvTx({ f: 'frame', mon: s.group[e.ke].mon_conf[e.id].details, ke: e.ke, id: e.id, time: misc.moment(), frame: d }, s.group[e.ke].mon[e.id].detectorStreamTx);
                                                 };
                                             })
                                         }
@@ -813,7 +882,30 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
                                                     e.fn()
                                                     break;
                                                 case /T[0-9][0-9]-[0-9][0-9]-[0-9][0-9]./.test(d):
-                                                    return logging.log(e, { type: lang['Video Finished'], msg: { filename: d } })
+                                                    var filename = d.split('.')[0] + '.' + e.ext
+                                                    s.video('insertCompleted', e, {
+                                                        file: filename
+                                                    })
+                                                    logging.log(e, { type: lang['Video Finished'], msg: { filename: d } })
+                                                    if (
+                                                        e.details.detector === '1' &&
+                                                        s.group[e.ke].mon[e.id].started === 1 &&
+                                                        e.details &&
+                                                        e.details.detector_record_method === 'del' &&
+                                                        e.details.detector_delete_motionless_videos === '1' &&
+                                                        s.group[e.ke].mon[e.id].detector_motion_count === 0
+                                                    ) {
+                                                        if (e.detaillogging.loglevel !== 'quiet') {
+                                                            logging.log(e, { type: lang['Delete Motionless Video'], msg: filename });
+                                                        }
+                                                        s.video('delete', {
+                                                            filename: filename,
+                                                            ke: e.ke,
+                                                            id: e.id
+                                                        })
+                                                    }
+                                                    s.group[e.ke].mon[e.id].detector_motion_count = 0
+                                                    return;
                                                     break;
                                             }
                                             logging.log(e, { type: "FFMPEG STDERR", msg: d })
@@ -825,13 +917,13 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
                                     return;
                                 }
                             }
-                            if (e.type !== 'socket' && e.type !== 'dashcam' && e.protocol !== 'udp' && e.type !== 'local') {
+                            if (e.type !== 'socket' && e.type !== 'dashcam' && e.protocol !== 'udp' && e.type !== 'local' || e.details.skip_ping === '1') {
                                 connectionTester.test(e.hosty, e.port, 2000, e.draw);
                             } else {
                                 e.draw(null, { success: true })
                             }
                         } else {
-                            misc.kill(s.group[e.ke].mon[e.id].spawn, s.group[e.ke]);
+                            misc.kill(s.group[e.ke].mon[e.id].spawn, e);
                         }
                     }
                     //start drawing files
@@ -942,10 +1034,6 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
                     //                clearTimeout(s.group[d.ke].mon[d.id].eventBasedRecording.timeout)
                     s.group[d.ke].mon[d.id].eventBasedRecording.timeout = setTimeout(function() {
                         s.group[d.ke].mon[d.id].eventBasedRecording.allowEnd = true;
-                        //                    s.group[d.ke].mon[d.id].eventBasedRecording.process.stdin.setEncoding('utf8');
-                        //                    s.group[d.ke].mon[d.id].eventBasedRecording.process.stdin.write('q');
-                        //                    s.group[d.ke].mon[d.id].eventBasedRecording.process.kill('SIGTERM');
-                        //                    s.group[d.ke].mon[d.id].closeVideo()
                     }, detector_timeout * 950 * 60)
                     if (!s.group[d.ke].mon[d.id].eventBasedRecording.process) {
                         if (!d.auth) {
@@ -956,9 +1044,10 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
                         }
                         s.group[d.ke].mon[d.id].eventBasedRecording.allowEnd = false;
                         var runRecord = function() {
+                            var filename = misc.moment() + '.mp4'
                             logging.log(d, { type: "Traditional Recording", msg: "Started" })
                                 //-t 00:'+moment(new Date(detector_timeout * 1000 * 60)).format('mm:ss')+'
-                            s.group[d.ke].mon[d.id].eventBasedRecording.process = spawn(config.ffmpegDir, ffmpeg.split(('-loglevel warning -analyzeduration 1000000 -probesize 1000000 -re -i http://' + config.ip + ':' + config.port + '/' + d.auth + '/hls/' + d.ke + '/' + d.id + '/detectorStream.m3u8 -t 00:' + moment(new Date(detector_timeout * 1000 * 60)).format('mm:ss') + ' -c:v copy -c:a copy -strftime 1 "' + s.video('getDir', d.mon) + misc.moment() + '.mp4"').replace(/\s+/g, ' ').trim()))
+                            s.group[d.ke].mon[d.id].eventBasedRecording.process = spawn(config.ffmpegDir, ffmpeg.split(('-loglevel warning -analyzeduration 1000000 -probesize 1000000 -re -i http://' + config.ip + ':' + config.port + '/' + d.auth + '/hls/' + d.ke + '/' + d.id + '/detectorStream.m3u8 -t 00:' + moment(new Date(detector_timeout * 1000 * 60)).format('mm:ss') + ' -c:v copy -strftime 1 "' + s.video('getDir', d.mon) + filename + '"').replace(/\s+/g, ' ').trim()))
                             var ffmpegError = '';
                             var error
                             s.group[d.ke].mon[d.id].eventBasedRecording.process.stderr.on('data', function(data) {
@@ -970,8 +1059,11 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
                                     runRecord()
                                     return
                                 }
+                                d.mid = d.id
+                                s.video('insertCompleted', d, {
+                                    file: filename
+                                })
                                 logging.log(d, { type: "Traditional Recording", msg: "Detector Recording Complete" })
-                                s.group[d.ke].mon[d.id].closeVideo()
                                 delete(s.group[d.ke].users[d.auth])
                                 logging.log(d, { type: "Traditional Recording", msg: 'Clear Recorder Process' })
                                 delete(s.group[d.ke].mon[d.id].eventBasedRecording.process)
@@ -1020,7 +1112,7 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
                 }
                 //mailer
                 if (config.mail && !s.group[d.ke].mon[d.id].detector_mail && d.mon.details.detector_mail === '1') {
-                    s.sqlQuery('SELECT mail FROM Users WHERE ke=? AND details NOT LIKE ?', [d.ke, '%"sub"%'], function(err, r) {
+                    sql.query('SELECT mail FROM Users WHERE ke=? AND details NOT LIKE ?', [d.ke, '%"sub"%'], function(err, r) {
                         r = r[0];
                         var detector_mail_timeout
                         if (!d.mon.details.detector_mail_timeout || d.mon.details.detector_mail_timeout === '') {
@@ -1065,7 +1157,7 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
                 }
                 //save this detection result in SQL, only coords. not image.
                 if (d.mon.details.detector_save === '1') {
-                    s.sqlQuery('INSERT INTO Events (ke,mid,details) VALUES (?,?,?)', [d.ke, d.id, detailString])
+                    sql.query('INSERT INTO Events (ke,mid,details) VALUES (?,?,?)', [d.ke, d.id, detailString])
                 }
                 if (d.mon.details.detector_command_enable === '1' && !s.group[d.ke].mon[d.id].detector_command) {
                     var detector_command_timeout
