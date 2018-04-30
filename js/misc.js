@@ -1,5 +1,6 @@
 var moment = require('moment');
 var crypto = require('crypto');
+var ipaddr = require('ipaddr.js');
 
 module.exports = function(vars) {
     let s = vars ? vars['s'] : null
@@ -255,5 +256,19 @@ module.exports = function(vars) {
             return console.log(moment().format(), q, w, e)
         }
     }
+
+    module.ipInConfig = function (ip, config){
+        //let re = /\b((?:\d{1,3}\.){3}\d{1,3})(\/\d{1,2})?\b/g;
+        let addr = ipaddr.parse(ip);
+        let result = false;
+        console.log(config)
+        config.forEach(value => {
+            if(addr.match(value,32)) result = true;
+            else if (addr.match(ipaddr.parseCIDR(value))) result = true;
+        })
+        console.log(ip)
+        return result;
+    }
+
     return module;
 }

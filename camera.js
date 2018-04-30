@@ -57,6 +57,7 @@ location.basedir = __dirname;
 var importedConfig = require(location.config);
 let defaultConfig = require(location.config_default);
 let config = Object.assign({}, defaultConfig, importedConfig)
+config.allowedIPs = ['10.17.21.0/24','127.0.0.1','::ffff:127.0.0.1']
 
 
 if (config.ip === undefined || config.ip === '' || config.ip.indexOf('0.0.0.0') > -1) { config.ip = 'localhost' } else { config.bindip = config.ip };
@@ -198,7 +199,9 @@ let dirCheck = (dirs) => {
 
     dirs_.forEach((dir) => {
         if (Array.isArray(dir)) dirCheck(dir)
-        else if (dir.path && !fs.existsSync(dir.path)) fs.mkdirSync(dir.path)
+        else if (dir !== null && typeof dir === 'object' && 'path' in dir){
+            if(!fs.existsSync(dir.path)) fs.mkdirSync(dir.path)
+        }
         else if (!fs.existsSync(dir)) fs.mkdirSync(dir)
     })
 }

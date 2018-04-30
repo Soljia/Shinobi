@@ -90,12 +90,17 @@ module.exports = function(vars) {
         });
         //super page
         app.get('/super', function(req, res) {
-            res.render('index', { lang: lang, config: config, screen: 'super' }, function(err, html) {
-                if (err) {
-                    logging.systemLog(err)
-                }
-                res.end(html)
-            })
+            var ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+            if(!misc.ipInConfig(ip,config.allowedIPs)){
+                res.redirect('/');
+            } else{
+                res.render('index', { lang: lang, config: config, screen: 'super' }, function(err, html) {
+                    if (err) {
+                        logging.systemLog(err)
+                    }
+                    res.end(html)
+                })
+            }
         });
         //update server
         app.get('/:auth/update/:key', function(req, res) {
