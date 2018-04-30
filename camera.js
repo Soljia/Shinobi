@@ -94,13 +94,14 @@ s.__basedir = __dirname;
 var misc = require('./js/misc')({ s: s, config: config, io: io });
 var logging = require('./js/logging')({ s, config, misc });
 var sql = require('./js/sql')({ config, logging, location })
+var init = require('./js/init')({ misc, sql, config });
 logging.sqlCall = sql.query;
 var ffmpeg = require('./js/ffmpeg')(s, config, misc);
-var camera = require('./js/camera')(s, config, ffmpeg, logging, lang, misc, nodemailer);
-var connection = require('./js/connection')({ s, config, logging, misc, camera, lang, sql });
+var camera = require('./js/camera')({ s, config, ffmpeg, logging, lang, misc, nodemailer, sql, init });
+var connection = require('./js/connection')({ s, config, logging, misc, camera, lang, sql, init });
 var screen = require('./js/screen')({ s, config, misc, logging, sql, lang, location });
 var pages = require('./js/pages')({ s, config, logging, location, screen, io, lang, sql, camera, misc })
-var stats = require('./js/stats')({ s, logging, sql, camera, lang });
+var stats = require('./js/stats')({ s, logging, sql, camera, lang, misc, init });
 
 //load languages dynamically
 s.loadedLanguages = {}
@@ -209,160 +210,7 @@ let dirCheck = (dirs) => {
 
 dirCheck(s.dir);
 ////Camera Controller
-s.init = function(x, e, k, fn) {
-    if (!e) { e = {} }
-    if (!k) { k = {} }
-    switch (x) {
-        case 0: //init camera
-            if (!s.group[e.ke]) { s.group[e.ke] = {} };
-            if (!s.group[e.ke].fileBin) { s.group[e.ke].fileBin = {} };
-            if (!s.group[e.ke].mon) { s.group[e.ke].mon = {} }
-            if (!s.group[e.ke].sizeChangeQueue) { s.group[e.ke].sizeChangeQueue = [] }
-            if (!s.group[e.ke].sizePurgeQueue) { s.group[e.ke].sizePurgeQueue = [] }
-            if (!s.group[e.ke].users) { s.group[e.ke].users = {} }
-            if (!s.group[e.ke].mon[e.mid]) { s.group[e.ke].mon[e.mid] = {} }
-            if (!s.group[e.ke].mon[e.mid].streamIn) { s.group[e.ke].mon[e.mid].streamIn = {} };
-            if (!s.group[e.ke].mon[e.mid].emitterChannel) { s.group[e.ke].mon[e.mid].emitterChannel = {} };
-            if (!s.group[e.ke].mon[e.mid].mp4frag) { s.group[e.ke].mon[e.mid].mp4frag = {} };
-            if (!s.group[e.ke].mon[e.mid].firstStreamChunk) { s.group[e.ke].mon[e.mid].firstStreamChunk = {} };
-            if (!s.group[e.ke].mon[e.mid].contentWriter) { s.group[e.ke].mon[e.mid].contentWriter = {} };
-            if (!s.group[e.ke].mon[e.mid].eventBasedRecording) { s.group[e.ke].mon[e.mid].eventBasedRecording = {} };
-            if (!s.group[e.ke].mon[e.mid].watch) { s.group[e.ke].mon[e.mid].watch = {} };
-            if (!s.group[e.ke].mon[e.mid].fixingVideos) { s.group[e.ke].mon[e.mid].fixingVideos = {} };
-            if (!s.group[e.ke].mon[e.mid].record) { s.group[e.ke].mon[e.mid].record = { yes: e.record } };
-            if (!s.group[e.ke].mon[e.mid].started) { s.group[e.ke].mon[e.mid].started = 0 };
-            if (s.group[e.ke].mon[e.mid].delete) { clearTimeout(s.group[e.ke].mon[e.mid].delete) }
-            if (!s.group[e.ke].mon_conf) { s.group[e.ke].mon_conf = {} }
-            s.init('apps', e)
-            break;
-        case 'group':
-            if (!s.group[e.ke]) {
-                s.group[e.ke] = {}
-            }
-            if (!s.group[e.ke].init) {
-                s.group[e.ke].init = {}
-            }
-            if (!e.limit || e.limit === '') { e.limit = 10000 } else { e.limit = parseFloat(e.limit) }
-            //save global space limit for group key (mb)
-            s.group[e.ke].sizeLimit = e.limit;
-            //save global used space as megabyte value
-            s.group[e.ke].usedSpace = e.size / 1000000;
-            //emit the changes to connected users
-            s.init('diskUsedEmit', e)
-            break;
-        case 'apps':
-            if (!s.group[e.ke].init) {
-                s.group[e.ke].init = {};
-            }
-            if (!s.group[e.ke].webdav || !s.group[e.ke].sizeLimit) {
-                sql.query('SELECT * FROM Users WHERE ke=? AND details NOT LIKE ?', [e.ke, '%"sub"%'], function(ar, r) {
-                    if (r && r[0]) {
-                        r = r[0];
-                        ar = JSON.parse(r.details);
-                        //owncloud/webdav
-                        if (ar.webdav_user &&
-                            ar.webdav_user !== '' &&
-                            ar.webdav_pass &&
-                            ar.webdav_pass !== '' &&
-                            ar.webdav_url &&
-                            ar.webdav_url !== ''
-                        ) {
-                            if (!ar.webdav_dir || ar.webdav_dir === '') {
-                                ar.webdav_dir = '/';
-                                if (ar.webdav_dir.slice(-1) !== '/') { ar.webdav_dir += '/'; }
-                            }
-                            s.group[e.ke].webdav = webdav(
-                                ar.webdav_url,
-                                ar.webdav_user,
-                                ar.webdav_pass
-                            );
-                        }
-                        Object.keys(ar).forEach(function(v) {
-                            s.group[e.ke].init[v] = ar[v]
-                        })
-                    }
-                });
-            }
-            break;
-        case 'sync':
-            e.cn = Object.keys(s.child_nodes);
-            e.cn.forEach(function(v) {
-                if (s.group[e.ke]) {
-                    misc.cx({ f: 'sync', sync: s.init('noReference', s.group[e.ke].mon[e.mid]), ke: e.ke, mid: e.mid }, s.child_nodes[v].cnid);
-                }
-            });
-            break;
-        case 'noReference':
-            x = { keys: Object.keys(e), ar: {} };
-            x.keys.forEach(function(v) {
-                if (v !== 'last_frame' && v !== 'record' && v !== 'spawn' && v !== 'running' && (v !== 'time' && typeof e[v] !== 'function')) { x.ar[v] = e[v]; }
-            });
-            return x.ar;
-            break;
-        case 'url':
-            //build a complete url from pieces
-            e.authd = '';
-            if (e.details.muser && e.details.muser !== '' && e.host.indexOf('@') === -1) {
-                e.authd = e.details.muser + ':' + e.details.mpass + '@';
-            }
-            if (e.port == 80 && e.details.port_force !== '1') { e.porty = '' } else { e.porty = ':' + e.port }
-            e.url = e.protocol + '://' + e.authd + e.host + e.porty + e.path;
-            return e.url;
-            break;
-        case 'url_no_path':
-            e.authd = '';
-            if (!e.details.muser) { e.details.muser = '' }
-            if (!e.details.mpass) { e.details.mpass = '' }
-            if (e.details.muser !== '' && e.host.indexOf('@') === -1) {
-                e.authd = e.details.muser + ':' + e.details.mpass + '@';
-            }
-            if (e.port == 80 && e.details.port_force !== '1') { e.porty = '' } else { e.porty = ':' + e.port }
-            e.url = e.protocol + '://' + e.authd + e.host + e.porty;
-            return e.url;
-            break;
-        case 'diskUsedEmit':
-            //send the amount used disk space to connected users
-            if (s.group[e.ke] && s.group[e.ke].init) {
-                misc.tx({ f: 'diskUsed', size: s.group[e.ke].usedSpace, limit: s.group[e.ke].sizeLimit }, 'GRP_' + e.ke);
-            }
-            break;
-        case 'diskUsedSet':
-            //`k` will be used as the value to add or substract
-            s.group[e.ke].sizeChangeQueue.push(k)
-            if (s.group[e.ke].sizeChanging !== true) {
-                //lock this function
-                s.group[e.ke].sizeChanging = true
-                    //validate current values
-                if (!s.group[e.ke].usedSpace) {
-                    s.group[e.ke].usedSpace = 0
-                } else {
-                    s.group[e.ke].usedSpace = parseFloat(s.group[e.ke].usedSpace)
-                }
-                if (s.group[e.ke].usedSpace < 0 || isNaN(s.group[e.ke].usedSpace)) {
-                    s.group[e.ke].usedSpace = 0
-                }
-                //set queue processor
-                var checkQueue = function() {
-                    //get first in queue
-                    var currentChange = s.group[e.ke].sizeChangeQueue[0]
-                        //change global size value
-                    s.group[e.ke].usedSpace = s.group[e.ke].usedSpace + currentChange
-                        //remove value just used from queue
-                    s.group[e.ke].sizeChangeQueue = s.group[e.ke].sizeChangeQueue.splice(1, s.group[e.ke].sizeChangeQueue.length + 10)
-                        //do next one
-                    if (s.group[e.ke].sizeChangeQueue.length > 0) {
-                        checkQueue()
-                    } else {
-                        s.group[e.ke].sizeChanging = false
-                        s.init('diskUsedEmit', e)
-                    }
-                }
-                checkQueue()
-            }
-            break;
-    }
-    if (typeof e.callback === 'function') { setTimeout(function() { e.callback() }, 500); }
-}
+
 s.filterEvents = function(x, d) {
     switch (x) {
         case 'archive':
@@ -481,7 +329,7 @@ s.video = function(x, e, k) {
                             if (err) {
                                 logging.systemLog('File Delete Error : ' + e.ke + ' : ' + ' : ' + e.mid, err)
                             }
-                            s.init('diskUsedSet', e, -(r.size / 1000000))
+                            init.init('diskUsedSet', e, -(r.size / 1000000))
                         })
                         misc.tx({ f: 'video_delete', filename: filename, mid: e.mid, ke: e.ke, time: misc.nameToTime(filename), end: misc.moment(new Date, 'YYYY-MM-DD HH:mm:ss') }, 'GRP_' + e.ke);
                         s.file('delete', dir + filename)
@@ -503,7 +351,7 @@ s.video = function(x, e, k) {
             break;
         case 'diskUseUpdate':
             if (s.group[e.ke].init) {
-                s.init('diskUsedSet', e, e.filesizeMB)
+                init.init('diskUsedSet', e, e.filesizeMB)
                 if (config.cron.deleteOverMax === true) {
                     //check space
                     s.group[e.ke].sizePurgeQueue.push(1)
@@ -521,7 +369,7 @@ s.video = function(x, e, k) {
                             } else {
                                 //                                            console.log('checkQueueFinished',s.group[e.ke].sizePurgeQueue.length)
                                 s.group[e.ke].sizePurging = false
-                                s.init('diskUsedEmit', e)
+                                init.init('diskUsedEmit', e)
                             }
                         }
                         var checkQueue = function() {
@@ -540,7 +388,7 @@ s.video = function(x, e, k) {
                                             k.del.push('(mid=? AND time=?)');
                                             k.ar.push(ev.mid), k.ar.push(ev.time);
                                             s.file('delete', ev.dir);
-                                            s.init('diskUsedSet', e, -(ev.size / 1000000))
+                                            init.init('diskUsedSet', e, -(ev.size / 1000000))
                                             s.tx({ f: 'video_delete', ff: 'over_max', filename: s.moment(ev.time) + '.' + ev.ext, mid: ev.mid, ke: ev.ke, time: ev.time, end: s.moment(new Date, 'YYYY-MM-DD HH:mm:ss') }, 'GRP_' + e.ke);
                                         });
                                         if (k.del.length > 0) {
@@ -561,7 +409,7 @@ s.video = function(x, e, k) {
                         checkQueue()
                     }
                 } else {
-                    s.init('diskUsedEmit', e)
+                    init.init('diskUsedEmit', e)
                 }
             }
             break;
@@ -573,7 +421,7 @@ s.video = function(x, e, k) {
                     e.ext = s.group[e.ke].mon[e.id].open_ext
                 }
                 if (s.group[e.ke].mon[e.id].child_node) {
-                    misc.cx({ f: 'close', d: s.init('noReference', e) }, s.group[e.ke].mon[e.id].child_node_id);
+                    misc.cx({ f: 'close', d: init.init('noReference', e) }, s.group[e.ke].mon[e.id].child_node_id);
                 } else {
                     k.file = e.filename + '.' + e.ext
                     k.dir = e.dir.toString()
@@ -994,72 +842,9 @@ s.deleteFactorAuth = function(r) {
     }
 }
 
+//Initialize Pages
 pages.init();
 
-try {
-    s.cpuUsage = function(e) {
-        k = {}
-        switch (s.platform) {
-            case 'win32':
-                k.cmd = "@for /f \"skip=1\" %p in ('wmic cpu get loadpercentage') do @echo %p%"
-                break;
-            case 'darwin':
-                k.cmd = "ps -A -o %cpu | awk '{s+=$1} END {print s}'";
-                break;
-            case 'linux':
-                k.cmd = 'LANG=C top -b -n 2 | grep "^' + config.cpuUsageMarker + '" | awk \'{print $2}\' | tail -n1';
-                break;
-        }
-        if (config.customCpuCommand) {
-            exec(config.customCpuCommand, { encoding: 'utf8', detached: true }, function(err, d) {
-                if (s.isWin === true) {
-                    d = d.replace(/(\r\n|\n|\r)/gm, "").replace(/%/g, "")
-                }
-                e(d)
-            });
-        } else if (k.cmd) {
-            exec(k.cmd, { encoding: 'utf8', detached: true }, function(err, d) {
-                if (s.isWin === true) {
-                    d = d.replace(/(\r\n|\n|\r)/gm, "").replace(/%/g, "")
-                }
-                e(d)
-            });
-        } else {
-            e(0)
-        }
-    }
-    s.ramUsage = function(e) {
-        k = {}
-        switch (s.platform) {
-            case 'win32':
-                k.cmd = "wmic OS get FreePhysicalMemory /Value"
-                break;
-            case 'darwin':
-                k.cmd = "vm_stat | awk '/^Pages free: /{f=substr($3,1,length($3)-1)} /^Pages active: /{a=substr($3,1,length($3-1))} /^Pages inactive: /{i=substr($3,1,length($3-1))} /^Pages speculative: /{s=substr($3,1,length($3-1))} /^Pages wired down: /{w=substr($4,1,length($4-1))} /^Pages occupied by compressor: /{c=substr($5,1,length($5-1)); print ((a+w)/(f+a+i+w+s+c))*100;}'"
-                break;
-            default:
-                k.cmd = "LANG=C free | grep Mem | awk '{print $4/$2 * 100.0}'";
-                break;
-        }
-        if (k.cmd) {
-            exec(k.cmd, { encoding: 'utf8', detached: true }, function(err, d) {
-                if (s.isWin === true) {
-                    d = (parseInt(d.split('=')[1]) / (s.totalmem / 1000)) * 100
-                }
-                e(d)
-            });
-        } else {
-            e(0)
-        }
-    }
-    setInterval(function() {
-        s.cpuUsage(function(cpu) {
-            s.ramUsage(function(ram) {
-                misc.tx({ f: 'os', cpu: cpu, ram: ram }, 'CPU');
-            })
-        })
-    }, 10000);
-} catch (err) { logging.systemLog(lang['CPU indicator will not work. Continuing...']) }
 //check disk space every 20 minutes
 if (config.autoDropCache === true) {
     setInterval(function() {
@@ -1077,3 +862,4 @@ s.processReady = function() {
     }
     //Initialize disk monitoring
 stats.initDiskMonitor();
+stats.init_CPU_Memory_Monitor();

@@ -7,12 +7,21 @@ var Mp4Frag = require('mp4frag');
 var P2P = require('pipe2pam');
 var moment = require('moment');
 
-module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
+module.exports = function(vars) {
+    let s = vars['s']
+    let sql = vars['sql']
+    let logging = vars['logging']
+    let config = vars['config']
+    let lang = vars['lang']
+    let misc = vars['misc']
+    let nodemailer = vars['nodemailer']
+    let ffmpeg = vars['ffmpeg']
+    let init = vars['init']
     let module = {};
 
     module.camera = function(x, e, cn) {
         if (x !== 'motion') {
-            var ee = s.init('noReference', e);
+            var ee = init.init('noReference', e);
 
             if (!e) { e = {} };
             if (cn && cn.ke && !e.ke) { e.ke = cn.ke };
@@ -50,7 +59,7 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
                 var monitorConfig = s.group[e.ke].mon_conf[e.id];
                 if (monitorConfig.details.control !== "1") { logging.log(e, { type: lang['Control Error'], msg: lang.ControlErrorText1 }); return }
                 if (!monitorConfig.details.control_base_url || monitorConfig.details.control_base_url === '') {
-                    e.base = s.init('url_no_path', monitorConfig);
+                    e.base = init.init('url_no_path', monitorConfig);
                 } else {
                     e.base = monitorConfig.details.control_base_url;
                 }
@@ -235,7 +244,7 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
                                 misc.tx({ f: 'monitor_snapshot', snapshot: data, snapshot_format: 'ab', mid: e.mid, ke: e.ke }, 'GRP_' + e.ke)
                             })
                         } else {
-                            e.url = s.init('url', e.mon);
+                            e.url = init.init('url', e.mon);
                             switch (e.mon.type) {
                                 case 'mjpeg':
                                 case 'h264':
@@ -279,7 +288,7 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
                 break;
             case 'watch_on': //live streamers - join
                 //            if(s.group[e.ke].mon[e.id].watch[cn.id]){module.camera('watch_off',e,cn,tx);return}
-                s.init(0, { ke: e.ke, mid: e.id })
+                init.init(0, { ke: e.ke, mid: e.id })
                 if (!cn.monitor_watching) { cn.monitor_watching = {} }
                 if (!cn.monitor_watching[e.id]) { cn.monitor_watching[e.id] = { ke: e.ke } }
                 s.group[e.ke].mon[e.id].watch[cn.id] = {};
@@ -287,7 +296,7 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
                 //                sql.query('SELECT * FROM Monitors WHERE ke=? AND mid=?',[e.ke,e.id],function(err,r) {
                 //                    if(r&&r[0]){
                 //                        r=r[0];
-                //                        r.url=s.init('url',r);
+                //                        r.url=init.init('url',r);
                 //                        s.group[e.ke].mon.type=r.type;
                 //                    }
                 //                })
@@ -360,9 +369,9 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
                 break;
             case 'start':
             case 'record': //watch or record monitor url
-                s.init(0, { ke: e.ke, mid: e.id })
-                if (!s.group[e.ke].mon_conf[e.id]) { s.group[e.ke].mon_conf[e.id] = s.init('noReference', e); }
-                e.url = s.init('url', e);
+                init.init(0, { ke: e.ke, mid: e.id })
+                if (!s.group[e.ke].mon_conf[e.id]) { s.group[e.ke].mon_conf[e.id] = init.init('noReference', e); }
+                e.url = init.init('url', e);
                 if (s.group[e.ke].mon[e.id].started === 1) { return }
                 if (e.details.detector_trigger == '1') {
                     s.group[e.ke].mon[e.id].motion_lock = setTimeout(function() {
@@ -624,7 +633,7 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
                                         }
                                         e.captureOne()
                                     }
-                                    if (!s.group[e.ke] || !s.group[e.ke].mon[e.id]) { s.init(0, e) }
+                                    if (!s.group[e.ke] || !s.group[e.ke].mon[e.id]) { init.init(0, e) }
                                     s.group[e.ke].mon[e.id].spawn.on('error', function(er) {
                                         logging.log(e, { type: 'Spawn Error', msg: er });
                                         e.error_fatal()
@@ -937,7 +946,7 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
                                     e.frames = 0;
                                     s.group[e.ke].mon[e.id].spawn = {};
                                     s.group[e.ke].mon[e.id].child_node = n;
-                                    misc.cx({ f: 'spawn', d: s.init('noReference', e), mon: s.init('noReference', s.group[e.ke].mon[e.mid]) }, s.group[e.ke].mon[e.mid].child_node_id)
+                                    misc.cx({ f: 'spawn', d: init.init('noReference', e), mon: init.init('noReference', s.group[e.ke].mon[e.mid]) }, s.group[e.ke].mon[e.mid].child_node_id)
                                 } else {
                                     //                                logging.systemLog('Cannot Connect, Retrying...',e.id);
                                     e.error_fatal();
@@ -1185,5 +1194,6 @@ module.exports = function(s, config, ffmpeg, logging, lang, misc, nodemailer) {
         }
         if (typeof cn === 'function') { setTimeout(function() { cn() }, 1000); }
     }
+
     return module;
 }

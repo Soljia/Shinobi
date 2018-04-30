@@ -9,8 +9,9 @@ module.exports = function(vars) {
     let logging = vars['logging']
     let misc = vars['misc']
     let camera = vars['camera']
-    let lang = vars['lang'];
+    let lang = vars['lang']
     let sql = vars['sql']
+    let init = vars['init']
 
     let module = {};
     module.init = function(cn) {
@@ -252,8 +253,8 @@ module.exports = function(vars) {
                     }
                     misc.tx({ f: 'users_online', users: s.group[d.ke].users })
                     misc.tx({ f: 'user_status_change', ke: d.ke, uid: cn.uid, status: 1, user: s.group[d.ke].users[d.auth] }, 'GRP_' + d.ke)
-                    s.init('diskUsedEmit', d)
-                    s.init('apps', d)
+                    init.init('diskUsedEmit', d)
+                    init.init('apps', d)
                     sql.query('SELECT * FROM API WHERE ke=? AND uid=?', [d.ke, d.uid], function(err, rrr) {
                         misc.tx({
                             f: 'init_success',
@@ -461,7 +462,7 @@ module.exports = function(vars) {
                                                 if (!d.d.sub) {
                                                     s.group[d.ke].sizeLimit = parseFloat(newSize)
                                                     delete(s.group[d.ke].webdav)
-                                                    s.init('apps', d)
+                                                    init.init('apps', d)
                                                 }
                                                 misc.tx({ f: 'user_settings_change', uid: d.uid, ke: d.ke, form: d.form });
                                             });
@@ -644,7 +645,7 @@ module.exports = function(vars) {
                                     break;
                                 case 'watch_on':
                                     if (!d.ke) { d.ke = cn.ke }
-                                    s.init(0, { mid: d.id, ke: d.ke });
+                                    init.init(0, { mid: d.id, ke: d.ke });
                                     if (!s.group[d.ke] || !s.group[d.ke].mon[d.id] || s.group[d.ke].mon[d.id].started === 0) { return false }
                                     camera.camera(d.ff, d, cn, tx)
                                     cn.join('MON_' + d.id);
@@ -673,7 +674,7 @@ module.exports = function(vars) {
                                     sql.query('SELECT * FROM Monitors WHERE ke=? AND mid=?', [cn.ke, d.id], function(err, r) {
                                         if (r && r[0]) {
                                             r = r[0]
-                                            camera.camera(d.ff, { type: r.type, url: s.init('url', r), id: d.id, mode: d.ff, ke: cn.ke });
+                                            camera.camera(d.ff, { type: r.type, url: init.init('url', r), id: d.id, mode: d.ff, ke: cn.ke });
                                         }
                                     })
                                     break;
@@ -936,7 +937,7 @@ module.exports = function(vars) {
                                                         sql.query('INSERT INTO Users (ke,uid,mail,pass,details) VALUES (?,?,?,?,?)', [d.form.ke, d.form.uid, d.form.mail, misc.md5(d.form.pass), d.form.details])
                                                         misc.tx({ f: 'add_account', details: d.form.details, ke: d.form.ke, uid: d.form.uid, mail: d.form.mail }, '$');
                                                         //init user
-                                                        s.init('group', d.form)
+                                                        init.init('group', d.form)
                                                     }
                                                 })
                                             } else {
@@ -977,7 +978,7 @@ module.exports = function(vars) {
                                             }
                                             misc.tx({ f: 'edit_account', form: d.form, ke: d.account.ke, uid: d.account.uid }, '$');
                                             delete(s.group[d.account.ke].init);
-                                            s.init('apps', d.account)
+                                            init.init('apps', d.account)
                                         })
                                         break;
                                     case 'delete':
