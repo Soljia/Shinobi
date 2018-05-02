@@ -4,6 +4,14 @@ module.exports = function(vars) {
 
     let module = {};
 
+    module.config = (config, ProCallback) => {
+        if (config.ip === undefined || config.ip === '' || config.ip.indexOf('0.0.0.0') > -1) { config.ip = 'localhost' } else { config.bindip = config.ip };
+
+        if (!config.productType) config.productType = 'CE'
+
+        if (config.productType === 'Pro') ProCallback();
+    }
+
     module.init = function(x, e, k, fn) {
         if (!e) { e = {} }
         if (!k) { k = {} }

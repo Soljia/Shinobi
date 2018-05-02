@@ -47,6 +47,12 @@ var Cam = require('onvif').Cam;
 var Mp4Frag = require('mp4frag');
 var P2P = require('pipe2pam');
 var PamDiff = require('pam-diff');
+var winston = require('winston');
+var util = require('util');
+winston.add(winston.transports.Console);
+
+//Pro Modules
+let LdapAuth = {};
 var location = {}
 location.super = __dirname + '/super.json'
 location.config = __dirname + '/conf.json'
@@ -57,20 +63,7 @@ location.basedir = __dirname;
 var importedConfig = fs.existsSync(location.config) ? require(location.config) : {};
 let defaultConfig = require(location.config_default);
 let config = Object.assign({}, defaultConfig, importedConfig)
-config.allowedIPs = ['10.17.21.0/24', '127.0.0.1', '::ffff:127.0.0.1']
 
-
-if (config.ip === undefined || config.ip === '' || config.ip.indexOf('0.0.0.0') > -1) { config.ip = 'localhost' } else { config.bindip = config.ip };
-
-if (!config.productType) {
-    config.productType = 'CE'
-}
-if (config.productType === 'Pro') {
-    var LdapAuth = require('ldapauth-fork');
-}
-if (!config.language) {
-    config.language = 'en_CA'
-}
 try {
     var lang = require(location.languages + '/' + config.language + '.json');
 } catch (er) {
@@ -91,17 +84,44 @@ if (config.mail) {
 }
 s = { factorAuth: {}, child_help: false, totalmem: os.totalmem(), platform: os.platform(), s: JSON.stringify, isWin: (process.platform === 'win32') };
 s.__basedir = __dirname;
-var misc = require('./js/misc')({ s: s, config: config, io: io });
-var logging = require('./js/logging')({ s, config, misc });
-var sql = require('./js/sql')({ config, logging, location })
-var init = require('./js/init')({ misc, sql, config });
+
+let jsMap = new Map();
+
+let requestModule = (request) => {
+    let output = [];
+    if (Array.isArray(request)) request.forEach((module) => output.push(requestModule(module)));
+
+
+    return output;
+}
+
+jsMap.set('misc', require('./js/misc')(requestModule)); // s: s, config: config, io: io }))
+jsMap.set('logging', require('./js/logging')(requestModule)); //({ s, config, misc });
+jsMap.set('sql', require('./js/sql')(requestModule)); //)({ config, logging, location })
+jsMap.set('init', require('./js/init')(requestModule)); //)({ misc, sql, config });
+init.config(config, () => { LdapAuth = require('ldapauth-fork'); });
 logging.sqlCall = sql.query;
-var ffmpeg = require('./js/ffmpeg')(s, config, misc);
-var camera = require('./js/camera')({ s, config, ffmpeg, logging, lang, misc, nodemailer, sql, init });
-var connection = require('./js/connection')({ s, config, logging, misc, camera, lang, sql, init });
-var screen = require('./js/screen')({ s, config, misc, logging, sql, lang, location });
-var pages = require('./js/pages')({ s, config, logging, location, screen, io, lang, sql, camera, misc })
-var stats = require('./js/stats')({ s, logging, sql, camera, lang, misc, init });
+jsMap.set('ffmpeg', require('./js/ffmpeg')(requestModule)); //)(s, config, misc);
+jsMap.set('camera', require('./js/camera')(requestModule)); //)({ s, config, ffmpeg, logging, lang, misc, nodemailer, sql, init });
+jsMap.set('connection', require('./js/connection')(requestModule)); //)({ s, config, logging, misc, camera, lang, sql, init });
+jsMap.set('screen', require('./js/screen')(requestModule)); //)({ s, config, misc, logging, sql, lang, location });
+jsMap.set('pages', require('./js/pages')(requestModule)); //)({ s, config, logging, location, screen, io, lang, sql, camera, misc })
+jsMap.set('stats', require('./js/stats')(requestModule)); //)({ s, logging, sql, camera, lang, misc, init, config });
+jsMap.set('video', require('./js/video')(requestModule)); //)({ s, logging, sql, camera, misc, init });
+
+let sqlLog = winston.transports.SQL = function(options) {
+    var self = this;
+
+    self.name = 'SQL Logger'
+    self.level = options.level || 'info'
+}
+
+util.inherits(SQL, winston.Transport);
+
+sqlLog.prototype.log = sql.log;
+
+winston.add(winston.transports.SQL, { host: '', port: '', user: '', password: '' })
+
 
 //load languages dynamically
 s.loadedLanguages = {}
@@ -215,7 +235,7 @@ s.filterEvents = function(x, d) {
     switch (x) {
         case 'archive':
             d.videos.forEach(function(v, n) {
-                s.video('archive', v)
+                video.fn('archive', v)
             })
             break;
         case 'email':
@@ -248,331 +268,11 @@ s.filterEvents = function(x, d) {
             break;
         case 'delete':
             d.videos.forEach(function(v, n) {
-                s.video('delete', v)
+                video.fn('delete', v)
             })
             break;
         case 'execute':
             exec(d.execute, { detached: true })
-            break;
-    }
-}
-s.video = function(x, e, k) {
-    if (!e) { e = {} };
-    switch (x) {
-        case 'getDir':
-            if (e.mid && !e.id) { e.id = e.mid };
-            if (e.details && (e.details instanceof Object) === false) {
-                try { e.details = JSON.parse(e.details) } catch (err) {}
-            }
-            if (e.details && e.details.dir && e.details.dir !== '') {
-                return misc.checkCorrectPathEnding(e.details.dir) + e.ke + '/' + e.id + '/'
-            } else {
-                return s.dir.videos + e.ke + '/' + e.id + '/';
-            }
-            break;
-    }
-    if (!k) k = {};
-    if (x !== 'getDir') { e.dir = s.video('getDir', e) }
-    switch (x) {
-        case 'fix':
-            e.sdir = s.dir.streams + e.ke + '/' + e.id + '/';
-            if (!e.filename && e.time) { e.filename = misc.moment(e.time) }
-            if (e.filename.indexOf('.') === -1) {
-                e.filename = e.filename + '.' + e.ext
-            }
-            misc.tx({ f: 'video_fix_start', mid: e.mid, ke: e.ke, filename: e.filename }, 'GRP_' + e.ke)
-            s.group[e.ke].mon[e.id].fixingVideos[e.filename] = {}
-            switch (e.ext) {
-                case 'mp4':
-                    e.fixFlags = '-vcodec libx264 -acodec aac -strict -2';
-                    break;
-                case 'webm':
-                    e.fixFlags = '-vcodec libvpx -acodec libvorbis';
-                    break;
-            }
-            e.spawn = spawn(config.ffmpegDir, ('-i ' + e.dir + e.filename + ' ' + e.fixFlags + ' ' + e.sdir + e.filename).split(' '), { detached: true })
-            e.spawn.stdout.on('data', function(data) {
-                misc.tx({ f: 'video_fix_data', mid: e.mid, ke: e.ke, filename: e.filename }, 'GRP_' + e.ke)
-            });
-            e.spawn.on('close', function(data) {
-                exec('mv ' + e.dir + e.filename + ' ' + e.sdir + e.filename, { detached: true }).on('exit', function() {
-                    misc.tx({ f: 'video_fix_success', mid: e.mid, ke: e.ke, filename: e.filename }, 'GRP_' + e.ke)
-                    delete(s.group[e.ke].mon[e.id].fixingVideos[e.filename]);
-                })
-            });
-            break;
-        case 'archive':
-            if (!e.filename && e.time) { e.filename = misc.moment(e.time) }
-            if (!e.status) { e.status = 0 }
-            e.details.archived = "1"
-            e.save = [JSON.stringify(e.details), e.id, e.ke, misc.nameToTime(e.filename)];
-            sql.query('UPDATE Videos SET details=? WHERE `mid`=? AND `ke`=? AND `time`=?', e.save, function(err, r) {
-                misc.tx({ f: 'video_edit', status: 3, filename: e.filename + '.' + e.ext, mid: e.mid, ke: e.ke, time: misc.nameToTime(e.filename) }, 'GRP_' + e.ke);
-            });
-            break;
-        case 'delete':
-            if (!e.filename && e.time) { e.filename = misc.moment(e.time) }
-            var filename
-            if (e.filename.indexOf('.') > -1) {
-                filename = e.filename
-            } else {
-                filename = e.filename + '.' + e.ext
-            }
-            if (!e.status) { e.status = 0 }
-            e.save = [e.id, e.ke, misc.nameToTime(filename)];
-            sql.query('SELECT * FROM Videos WHERE `mid`=? AND `ke`=? AND `time`=?', e.save, function(err, r) {
-                if (r && r[0]) {
-                    r = r[0]
-                    var dir = s.video('getDir', r)
-                    sql.query('DELETE FROM Videos WHERE `mid`=? AND `ke`=? AND `time`=?', e.save, function() {
-                        fs.stat(dir + filename, function(err, file) {
-                            if (err) {
-                                logging.systemLog('File Delete Error : ' + e.ke + ' : ' + ' : ' + e.mid, err)
-                            }
-                            init.init('diskUsedSet', e, -(r.size / 1000000))
-                        })
-                        misc.tx({ f: 'video_delete', filename: filename, mid: e.mid, ke: e.ke, time: misc.nameToTime(filename), end: misc.moment(new Date, 'YYYY-MM-DD HH:mm:ss') }, 'GRP_' + e.ke);
-                        s.file('delete', dir + filename)
-                    })
-                }
-            })
-            break;
-        case 'open':
-            //on video open
-            e.save = [e.id, e.ke, misc.nameToTime(e.filename), e.ext];
-            if (!e.status) { e.save.push(0) } else { e.save.push(e.status) }
-            k.details = {}
-            if (e.details && e.details.dir && e.details.dir !== '') {
-                k.details.dir = e.details.dir
-            }
-            e.save.push(s.s(k.details))
-            sql.query('INSERT INTO Videos (mid,ke,time,ext,status,details) VALUES (?,?,?,?,?,?)', e.save)
-            misc.tx({ f: 'video_build_start', filename: e.filename + '.' + e.ext, mid: e.id, ke: e.ke, time: misc.nameToTime(e.filename), end: misc.moment(new Date, 'YYYY-MM-DD HH:mm:ss') }, 'GRP_' + e.ke);
-            break;
-        case 'diskUseUpdate':
-            if (s.group[e.ke].init) {
-                init.init('diskUsedSet', e, e.filesizeMB)
-                if (config.cron.deleteOverMax === true) {
-                    //check space
-                    s.group[e.ke].sizePurgeQueue.push(1)
-                    if (s.group[e.ke].sizePurging !== true) {
-                        //lock this function
-                        s.group[e.ke].sizePurging = true
-                            //set queue processor
-                        var finish = function() {
-                            //                                        console.log('checkQueueOne',s.group[e.ke].sizePurgeQueue.length)
-                            //remove value just used from queue
-                            s.group[e.ke].sizePurgeQueue = s.group[e.ke].sizePurgeQueue.splice(1, s.group[e.ke].sizePurgeQueue.length + 10)
-                                //do next one
-                            if (s.group[e.ke].sizePurgeQueue.length > 0) {
-                                checkQueue()
-                            } else {
-                                //                                            console.log('checkQueueFinished',s.group[e.ke].sizePurgeQueue.length)
-                                s.group[e.ke].sizePurging = false
-                                init.init('diskUsedEmit', e)
-                            }
-                        }
-                        var checkQueue = function() {
-                            //                                        console.log('checkQueue',config.cron.deleteOverMaxOffset)
-                            //get first in queue
-                            var currentPurge = s.group[e.ke].sizePurgeQueue[0]
-                            var deleteVideos = function() {
-                                //                                            console.log(s.group[e.ke].usedSpace>(s.group[e.ke].sizeLimit*config.cron.deleteOverMaxOffset))
-                                //run purge command
-                                if (s.group[e.ke].usedSpace > (s.group[e.ke].sizeLimit * config.cron.deleteOverMaxOffset)) {
-                                    sql.query('SELECT * FROM Videos WHERE status != 0 AND details NOT LIKE \'%"archived":"1"%\' AND ke=? ORDER BY `time` ASC LIMIT 2', [e.ke], function(err, evs) {
-                                        k.del = [];
-                                        k.ar = [e.ke];
-                                        evs.forEach(function(ev) {
-                                            ev.dir = s.video('getDir', ev) + s.moment(ev.time) + '.' + ev.ext;
-                                            k.del.push('(mid=? AND time=?)');
-                                            k.ar.push(ev.mid), k.ar.push(ev.time);
-                                            s.file('delete', ev.dir);
-                                            init.init('diskUsedSet', e, -(ev.size / 1000000))
-                                            s.tx({ f: 'video_delete', ff: 'over_max', filename: s.moment(ev.time) + '.' + ev.ext, mid: ev.mid, ke: ev.ke, time: ev.time, end: s.moment(new Date, 'YYYY-MM-DD HH:mm:ss') }, 'GRP_' + e.ke);
-                                        });
-                                        if (k.del.length > 0) {
-                                            k.qu = k.del.join(' OR ');
-                                            sql.query('DELETE FROM Videos WHERE ke =? AND (' + k.qu + ')', k.ar, function() {
-                                                deleteVideos()
-                                            })
-                                        } else {
-                                            finish()
-                                        }
-                                    })
-                                } else {
-                                    finish()
-                                }
-                            }
-                            deleteVideos()
-                        }
-                        checkQueue()
-                    }
-                } else {
-                    init.init('diskUsedEmit', e)
-                }
-            }
-            break;
-        case 'close':
-            //video function : close
-            if (s.group[e.ke] && s.group[e.ke].mon[e.id]) {
-                if (s.group[e.ke].mon[e.id].open && !e.filename) {
-                    e.filename = s.group[e.ke].mon[e.id].open;
-                    e.ext = s.group[e.ke].mon[e.id].open_ext
-                }
-                if (s.group[e.ke].mon[e.id].child_node) {
-                    misc.cx({ f: 'close', d: init.init('noReference', e) }, s.group[e.ke].mon[e.id].child_node_id);
-                } else {
-                    k.file = e.filename + '.' + e.ext
-                    k.dir = e.dir.toString()
-                        //get file directory
-                    k.fileExists = fs.existsSync(k.dir + k.file)
-                    if (k.fileExists !== true) {
-                        k.dir = s.dir.videos + '/' + e.ke + '/' + e.id + '/'
-                        k.fileExists = fs.existsSync(k.dir + k.file)
-                        if (k.fileExists !== true) {
-                            s.dir.addStorage.forEach(function(v) {
-                                if (k.fileExists !== true) {
-                                    k.dir = misc.checkCorrectPathEnding(v.path) + e.ke + '/' + e.id + '/'
-                                    k.fileExists = fs.existsSync(k.dir + k.file)
-                                }
-                            })
-                        }
-                    }
-                    if (k.fileExists === true) {
-                        //close video row
-                        k.stat = fs.statSync(k.dir + k.file)
-                        e.filesize = k.stat.size
-                        e.filesizeMB = parseFloat((e.filesize / 1000000).toFixed(2))
-                        e.end_time = s.moment(k.stat.mtime, 'YYYY-MM-DD HH:mm:ss')
-                        var save = [
-                            e.filesize,
-                            1,
-                            e.end_time,
-                            e.id,
-                            e.ke,
-                            s.nameToTime(e.filename)
-                        ]
-                        if (!e.status) {
-                            save.push(0)
-                        } else {
-                            save.push(e.status)
-                        }
-                        sql.query('UPDATE Videos SET `size`=?,`status`=?,`end`=? WHERE `mid`=? AND `ke`=? AND `time`=? AND `status`=?', save)
-                            //send event for completed recording
-                        s.txWithSubPermissions({
-                            f: 'video_build_success',
-                            hrefNoAuth: '/videos/' + e.ke + '/' + e.mid + '/' + k.file,
-                            filename: k.file,
-                            mid: e.id,
-                            ke: e.ke,
-                            time: moment(s.nameToTime(e.filename)).format(),
-                            size: e.filesize,
-                            end: moment(e.end_time).format()
-                        }, 'GRP_' + e.ke, 'video_view');
-                        //send new diskUsage values
-                        s.video('diskUseUpdate', e, k)
-                    } else {
-                        s.video('delete', e);
-                        s.log(e, { type: lang['File Not Exist'], msg: lang.FileNotExistText, ffmpeg: s.group[e.ke].mon[e.id].ffmpeg })
-                        if (e.mode && config.restart.onVideoNotExist === true && e.fn) {
-                            delete(s.group[e.ke].mon[e.id].open);
-                            s.log(e, { type: lang['Camera is not recording'], msg: { msg: lang.CameraNotRecordingText } });
-                            if (s.group[e.ke].mon[e.id].started === 1) {
-                                s.camera('restart', e)
-                            }
-                        }
-                    }
-                }
-            }
-            delete(s.group[e.ke].mon[e.id].open);
-            break;
-        case 'insertCompleted':
-            k.dir = e.dir.toString()
-                //get file directory
-            k.fileExists = fs.existsSync(k.dir + k.file)
-            if (k.fileExists !== true) {
-                k.dir = s.dir.videos + '/' + e.ke + '/' + e.id + '/'
-                k.fileExists = fs.existsSync(k.dir + k.file)
-                if (k.fileExists !== true) {
-                    s.dir.addStorage.forEach(function(v) {
-                        if (k.fileExists !== true) {
-                            k.dir = s.checkCorrectPathEnding(v.path) + e.ke + '/' + e.id + '/'
-                            k.fileExists = fs.existsSync(k.dir + k.file)
-                        }
-                    })
-                }
-            }
-            if (k.fileExists === true) {
-                //close video row
-                k.stat = fs.statSync(k.dir + k.file)
-                e.filesize = k.stat.size
-                e.filesizeMB = parseFloat((e.filesize / 1000000).toFixed(2))
-                e.startTime = s.nameToTime(k.file)
-                e.endTime = s.moment(k.stat.mtime, 'YYYY-MM-DD HH:mm:ss')
-                if (!e.ext) { e.ext = k.file.split('.')[1] }
-                //send event for completed recording
-                s.txWithSubPermissions({
-                    f: 'video_build_success',
-                    hrefNoAuth: '/videos/' + e.ke + '/' + e.mid + '/' + k.file,
-                    filename: k.file,
-                    mid: e.mid,
-                    ke: e.ke,
-                    time: moment(e.startTime).format(),
-                    size: e.filesize,
-                    end: moment(e.endTime).format()
-                }, 'GRP_' + e.ke, 'video_view');
-
-                //cloud auto savers
-                //webdav
-                //                var webDAV = s.group[e.ke].webdav
-                //                if(webDAV&&s.group[e.ke].init.use_webdav!=='0'&&s.group[e.ke].init.webdav_save=="1"){
-                //                   fs.readFile(k.dir+k.file,function(err,data){
-                //                       var webdavUploadDir = s.group[e.ke].init.webdav_dir+e.ke+'/'+e.mid+'/'
-                //                       fs.readFile(k.dir+k.file,function(err,data){
-                //                           webDAV.putFileContents(webdavUploadDir+k.file,"binary",data).catch(function(err) {
-                //                               if(err){
-                //                                   webDAV.createDirectory(webdavUploadDir).catch(function(err) {
-                //                                       s.log(e,{type:lang['Webdav Error'],msg:{msg:lang.WebdavErrorText+' <b>/'+webdavUploadDir+'</b>',info:err}})
-                //                                   })
-                //                                   webDAV.putFileContents(webdavUploadDir+k.file,"binary",data).catch(function(err) {
-                //                                       s.log(e,{type:lang['Webdav Error'],msg:{msg:lang.WebdavErrorText+' <b>/'+webdavUploadDir+'</b>',info:err}})
-                //                                   })
-                //                                   s.log(e,{type:lang['Webdav Error'],msg:{msg:lang.WebdavErrorText+' <b>/'+webdavUploadDir+'</b>',info:err}})
-                //                               }
-                //                           });
-                //                        });
-                //                    });
-                //                }
-                if (s.group[e.ke].webdav && s.group[e.ke].init.use_webdav !== '0' && s.group[e.ke].init.webdav_save == "1") {
-                    fs.readFile(k.dir + k.file, function(err, data) {
-                        s.group[e.ke].webdav.putFileContents(s.group[e.ke].init.webdav_dir + e.ke + '/' + e.mid + '/' + k.file, "binary", data)
-                            .catch(function(err) {
-                                s.log(e, { type: lang['Webdav Error'], msg: { msg: lang.WebdavErrorText + ' <b>/' + e.ke + '/' + e.id + '</b>', info: err }, ffmpeg: s.group[e.ke].mon[e.id].ffmpeg })
-                                console.error(err);
-                            });
-                    });
-                }
-                k.details = {}
-                if (e.details && e.details.dir && e.details.dir !== '') {
-                    k.details.dir = e.details.dir
-                }
-                var save = [
-                    e.mid,
-                    e.ke,
-                    e.startTime,
-                    e.ext,
-                    1,
-                    s.s(k.details),
-                    e.filesize,
-                    e.endTime,
-                ]
-                sql.query('INSERT INTO Videos (mid,ke,time,ext,status,details,size,end) VALUES (?,?,?,?,?,?,?,?)', save)
-                    //send new diskUsage values
-                s.video('diskUseUpdate', e, k)
-            } else {
-                console.log(k)
-            }
             break;
     }
 }
@@ -598,110 +298,8 @@ s.file = function(x, e) {
     }
 }
 
-//function for receiving detector data
-s.pluginEventController = function(d) {
-        switch (d.f) {
-            case 'trigger':
-                camera.camera('motion', d)
-                break;
-            case 's.tx':
-                misc.tx(d.data, d.to)
-                break;
-            case 'sql':
-                sql.query(d.query, d.values);
-                break;
-            case 'log':
-                logging.systemLog('PLUGIN : ' + d.plug + ' : ', d)
-                break;
-        }
-    }
-    //multi plugin connections
-s.connectedPlugins = {}
-s.pluginInitiatorSuccess = function(mode, d, cn) {
-    logging.systemLog('pluginInitiatorSuccess', d)
-    if (mode === 'client') {
-        //is in client mode (camera.js is client)
-        cn.pluginEngine = d.plug
-        if (!s.connectedPlugins[d.plug]) {
-            s.connectedPlugins[d.plug] = { plug: d.plug }
-        }
-        logging.systemLog('Connected to plugin : Detector - ' + d.plug + ' - ' + d.type)
-        switch (d.type) {
-            default:
-                case 'detector':
-                s.ocv = { started: moment(), id: cn.id, plug: d.plug, notice: d.notice, isClientPlugin: true };
-            cn.ocv = 1;
-            misc.tx({ f: 'detector_plugged', plug: d.plug, notice: d.notice }, 'CPU')
-            break;
-        }
-    } else {
-        //is in host mode (camera.js is client)
-        switch (d.type) {
-            default:
-                case 'detector':
-                s.ocv = { started: moment(), id: "host", plug: d.plug, notice: d.notice, isHostPlugin: true };
-            break;
-        }
-    }
-    s.connectedPlugins[d.plug].plugged = true
-    misc.tx({ f: 'readPlugins', ke: d.ke }, 'CPU')
-    misc.ocvTx({ f: 'api_key', key: d.plug })
-    s.api[d.plug] = { pluginEngine: d.plug, permissions: {}, details: {}, ip: '0.0.0.0' };
-}
-s.pluginInitiatorFail = function(mode, d, cn) {
-    s.connectedPlugins[d.plug].plugged = false
-    if (mode === 'client') {
-        //is in client mode (camera.js is client)
-        cn.disconnect()
-    } else {
-        //is in host mode (camera.js is client)
-    }
-}
-if (config.plugins && config.plugins.length > 0) {
-    config.plugins.forEach(function(v) {
-        s.connectedPlugins[v.id] = { plug: v.id }
-        if (v.enabled === false) { return }
-        if (v.mode === 'host') {
-            //is in host mode (camera.js is client)
-            if (v.https === true) {
-                v.https = 'https://'
-            } else {
-                v.https = 'http://'
-            }
-            if (!v.port) {
-                v.port = 80
-            }
-            var socket = socketIOclient(v.https + v.host + ':' + v.port)
-            s.connectedPlugins[v.id].tx = function(x) { return socket.emit('f', x) }
-            socket.on('connect', function(cn) {
-                logging.systemLog('Connected to plugin (host) : ' + v.id)
-                s.connectedPlugins[v.id].tx({ f: 'init_plugin_as_host', key: v.key })
-            });
-            socket.on('init', function(d) {
-                logging.systemLog('Initialize Plugin : Host', d)
-                if (d.ok === true) {
-                    s.pluginInitiatorSuccess("host", d)
-                } else {
-                    s.pluginInitiatorFail("host", d)
-                }
-            });
-            socket.on('ocv', s.pluginEventController);
-            socket.on('disconnect', function() {
-                s.connectedPlugins[v.id].plugged = false
-                delete(s.api[v.id])
-                logging.systemLog('Plugin Disconnected : ' + v.id)
-                s.connectedPlugins[v.id].reconnector = setInterval(function() {
-                    if (socket.connected === true) {
-                        clearInterval(s.connectedPlugins[v.id].reconnector)
-                    } else {
-                        socket.connect()
-                    }
-                }, 1000 * 2)
-            });
-            s.connectedPlugins[v.id].ws = socket;
-        }
-    })
-}
+//Plugins
+
 ////socket controller
 s.cn = function(cn) { return { id: cn.id, ke: cn.ke, uid: cn.uid } }
 io.on('connection', function(cn) { connection.init(cn) });

@@ -1,3 +1,6 @@
+var execSync = require('child_process').execSync;
+var exec = require('child_process').exec;
+
 module.exports = function(vars) {
     let s = vars['s']
     let sql = vars['sql']

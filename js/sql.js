@@ -18,54 +18,47 @@ module.exports = function(vars) {
     if (databaseOptions.client === 'sqlite3' && databaseOptions.connection.filename === undefined) {
         databaseOptions.connection.filename = __dirname + "/shinobi.sqlite"
     }
-    let databaseEngine = knex(databaseOptions)
+    let db = knex(databaseOptions)
 
+    module.db = db;
     module.applySQLUpdates = function() {
         if (databaseOptions.client === 'mysql') {
-            module.query('ALTER TABLE `Videos` ADD COLUMN `details` TEXT NULL DEFAULT NULL AFTER `status`;', function(err) {
-                if (err) {
-                    logging.systemLog("Critical update 1/2 already applied");
-                }
-                sql.query("CREATE TABLE IF NOT EXISTS `Files` (`ke` varchar(50) NOT NULL,`mid` varchar(50) NOT NULL,`name` tinytext NOT NULL,`size` float NOT NULL DEFAULT '0',`details` text NOT NULL,`status` int(1) NOT NULL DEFAULT '0') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;", function(err) {
-                    if (err) {
-                        logging.systemLog("Critical update 2/2 NOT applied, this could be bad");
-                    } else {
-                        logging.systemLog("Critical update 2/2 already applied");
-                    }
-                }, true);
-            }, true);
+            if (!db.schema.hasColumn('Videos', 'details'))
+                db.schema.table('Videos', function(table) {
+                    table.string('details', 65535).notNullable();
+                })
+            else
+                winston.log("Critical update 1/2 already applied. `details` already exists in `Videos`.")
+
+            if (!db.schema.hasTable('Files'))
+                db.schema.createTable('Files', (table) => {
+                    table.increments('id');
+                    table.string('ke', 50).notNullable();
+                    table.string('mid', 50).notNullable();
+                    table.string('name', 255).notNullable();
+                    table.float('size').defaultTo(0).notNullable();;
+                    table.string('details', 65535).notNullable();
+                    table.integer('status').defaultTo(0).notNullable();
+                }).catch((e) =>
+                    winston.log({ level: 'error', message: "Critical update 2/2 not applied. " + e.toString() })
+                )
+            else
+                winston.log("Critical update 2/2 already applied. `Files` already exists in `ccio`.")
         }
     }
 
-    module.mergeQueryValues = function(query, values) {
-        if (!values) { values = [] }
-        var valuesNotFunction = true;
-        if (typeof values === 'function') {
-            var onMoveOn = values;
-            var values = [];
-            valuesNotFunction = false;
-        }
-        if (!onMoveOn) { onMoveOn = function() {} }
-        if (values && valuesNotFunction) {
-            var splitQuery = query.split('?')
-            var newQuery = ''
-            splitQuery.forEach(function(v, n) {
-                newQuery += v
-                if (values[n]) {
-                    if (isNaN(values[n])) {
-                        newQuery += "'" + values[n] + "'"
-                    } else {
-                        newQuery += values[n]
-                    }
-                }
-            })
-        } else {
-            newQuery = query
-        }
-        return newQuery
+    module.log = function(level, msg, meta, callback) {
+        if (!meta.timestamp)
+            meta.timestamp = Date.now();
+
+        if (!meta.type)
+            meta.type = '';
+
+        knex.table('Logs').insert({ timestamp: meta.timestamp, level: level, type: type, msg: msg });
+        callback(null, true);
     }
 
-    module.query = function(query, values, onMoveOn, hideLog) {
+    /*module.query = function(query, values, onMoveOn, hideLog) {
         if (!values) { values = [] }
         if (typeof values === 'function') {
             var onMoveOn = values;
@@ -73,7 +66,7 @@ module.exports = function(vars) {
         }
         if (!onMoveOn) { onMoveOn = function() {} }
         var mergedQuery = module.mergeQueryValues(query, values)
-        return databaseEngine.raw(query, values)
+        return db.raw(query, values)
             .asCallback(function(err, r) {
                 if (err && config.databaseLogs) {
                     logging.systemLog('sql.query QUERY', query)
@@ -94,7 +87,7 @@ module.exports = function(vars) {
                         console.log(onMoveOn)
                     }
             })
-    }
+    }*/
 
     return module;
 }
