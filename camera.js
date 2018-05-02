@@ -276,27 +276,6 @@ s.filterEvents = function(x, d) {
             break;
     }
 }
-s.file = function(x, e) {
-    if (!e) { e = {} };
-    switch (x) {
-        case 'size':
-            return fs.statSync(e.filename)["size"];
-            break;
-        case 'delete':
-            if (!e) { return false; }
-            return exec('rm -f ' + e, { detached: true });
-            break;
-        case 'delete_folder':
-            if (!e) { return false; }
-            return exec('rm -rf ' + e, { detached: true });
-            break;
-        case 'delete_files':
-            if (!e.age_type) { e.age_type = 'min' };
-            if (!e.age) { e.age = '1' };
-            exec('find ' + e.path + ' -type f -c' + e.age_type + ' +' + e.age + ' -exec rm -f {} +', { detached: true });
-            break;
-    }
-}
 
 //Plugins
 
