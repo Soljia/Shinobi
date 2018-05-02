@@ -13,18 +13,6 @@ process.on('uncaughtException', function(err) {
     console.error('Uncaught Exception occured!');
     console.error(err.stack);
 });
-var ffmpegPath = false;
-try {
-    ffmpegPath = require('ffmpeg-static').path;
-    if (!fs.existsSync(ffmpegPath)) {
-        console.log('"ffmpeg-static" from NPM has failed to provide a compatible library or has been corrupted.')
-        console.log('You may need to install FFmpeg manually or you can try running "npm uninstall ffmpeg-static && npm install ffmpeg-static".')
-    }
-} catch (err) {
-    ffmpegPath = false;
-    console.log('No Static FFmpeg. Continuing.')
-        //no static ffmpeg
-}
 var os = require('os');
 var URL = require('url');
 var path = require('path');
@@ -49,34 +37,72 @@ var P2P = require('pipe2pam');
 var PamDiff = require('pam-diff');
 var winston = require('winston');
 var util = require('util');
-winston.add(winston.transports.Console);
+var commandExists = require('command-exists').sync;
 
 //Pro Modules
 let LdapAuth = {};
-var location = {}
-location.super = __dirname + '/super.json'
-location.config = __dirname + '/conf.json'
-location.config_default = __dirname + '/conf.default.json'
-location.languages = __dirname + '/languages'
-location.definitions = __dirname + '/definitions'
-location.basedir = __dirname;
-var importedConfig = fs.existsSync(location.config) ? require(location.config) : {};
-let defaultConfig = require(location.config_default);
+
+// Configuration
+let defaultConfig = require('./conf.default.json');
+defaultConfig.location.defaultConfig = "conf.default.json"
+defaultConfig.location.forEach((item) => item = __dirname + "/" + item)
+defaultConfig.location.basedir = __dirname;
+
+var importedConfig = fs.existsSync(defaultConfig.location.config) ? require(defaultConfig.location.config) : {};
 let config = Object.assign({}, defaultConfig, importedConfig)
 
+// Configuration - ffmpeg location
+if (!config.location.ffmpegPath) {
+    try {
+        config.location.ffmpegPath = require('ffmpeg-static').path;
+        if (!fs.existsSync(config.location.ffmpegPath)) {
+            console.log('"ffmpeg-static" from NPM has failed to provide a compatible library or has been corrupted.')
+            console.log('You may need to install FFmpeg manually or you can try running "npm uninstall ffmpeg-static && npm install ffmpeg-static".')
+        }
+    } catch (err) {
+        config.location.ffmpegPath = false;
+        console.log('No Static FFmpeg. Continuing.')
+            //no static ffmpeg
+    }
+    if (!config.location.ffmpegPath) config.location.ffmpegPath = 'ffmpeg'
+}
+var logger = require("./js/log.js");
+// Requirements check
+let checkRequirements = () => {
+
+    let error = (error) => {
+            logger.log({ level: "error", message: "Requirement checks did not pass! See below." })
+            logger.log({ level: "error", message: JSON.stringify(err) })
+            process.exit(22);
+        }
+        // Check FFMpeg is available
+    commandExists(config.location.ffmpegPath).then((command) => {
+        if (require('ffmpeg-static').path !== config.location.ffmpegPath) {
+            s.ffmpegVersion = execSync(command + " -version").toString().split('Copyright')[0].replace('ffmpeg version', '').trim()
+            logger.log('FFMPEG version : ' + s.ffmpegVersion)
+            if (s.ffmpegVersion.indexOf(': 2.') > -1) {
+                throw 'FFMPEG is too old : ' + s.ffmpegVersion + ', Needed : 3.2+'
+            }
+        }
+    }).catch(error)
+
+    logger.log('NODE.JS version : ' + execSync("node -v"))
+}
+var sql = require("./js/sql.js");
+
 try {
-    var lang = require(location.languages + '/' + config.language + '.json');
+    var lang = require(config.location.languages + '/' + config.language + '.json');
 } catch (er) {
     console.error(er)
     console.log('There was an error loading your language file.')
-    var lang = require(location.languages + '/en_CA.json');
+    var lang = require(config.location.languages + '/en_CA.json');
 }
 try {
-    var definitions = require(location.definitions + '/' + config.language + '.json');
+    var definitions = require(config.location.definitions + '/' + config.language + '.json');
 } catch (er) {
     console.error(er)
     console.log('There was an error loading your language file.')
-    var definitions = require(location.definitions + '/en_CA.json');
+    var definitions = require(config.location.definitions + '/en_CA.json');
 }
 process.send = process.send || function() {};
 if (config.mail) {
@@ -85,17 +111,7 @@ if (config.mail) {
 s = { factorAuth: {}, child_help: false, totalmem: os.totalmem(), platform: os.platform(), s: JSON.stringify, isWin: (process.platform === 'win32') };
 s.__basedir = __dirname;
 
-let jsMap = new Map();
-
-let requestModule = (request) => {
-    let output = [];
-    if (Array.isArray(request)) request.forEach((module) => output.push(requestModule(module)));
-
-
-    return output;
-}
-
-jsMap.set('misc', require('./js/misc')(requestModule)); // s: s, config: config, io: io }))
+/*jsMap.set('misc', require('./js/misc')(requestModule)); // s: s, config: config, io: io }))
 jsMap.set('logging', require('./js/logging')(requestModule)); //({ s, config, misc });
 jsMap.set('sql', require('./js/sql')(requestModule)); //)({ config, logging, location })
 jsMap.set('init', require('./js/init')(requestModule)); //)({ misc, sql, config });
@@ -107,21 +123,7 @@ jsMap.set('connection', require('./js/connection')(requestModule)); //)({ s, con
 jsMap.set('screen', require('./js/screen')(requestModule)); //)({ s, config, misc, logging, sql, lang, location });
 jsMap.set('pages', require('./js/pages')(requestModule)); //)({ s, config, logging, location, screen, io, lang, sql, camera, misc })
 jsMap.set('stats', require('./js/stats')(requestModule)); //)({ s, logging, sql, camera, lang, misc, init, config });
-jsMap.set('video', require('./js/video')(requestModule)); //)({ s, logging, sql, camera, misc, init });
-
-let sqlLog = winston.transports.SQL = function(options) {
-    var self = this;
-
-    self.name = 'SQL Logger'
-    self.level = options.level || 'info'
-}
-
-util.inherits(SQL, winston.Transport);
-
-sqlLog.prototype.log = sql.log;
-
-winston.add(winston.transports.SQL, { host: '', port: '', user: '', password: '' })
-
+jsMap.set('video', require('./js/video')(requestModule)); //)({ s, logging, sql, camera, misc, init });*/
 
 //load languages dynamically
 s.loadedLanguages = {}
@@ -131,7 +133,7 @@ s.getLanguageFile = function(rule) {
             var file = s.loadedLanguages[file]
             if (!file) {
                 try {
-                    s.loadedLanguages[rule] = require(location.languages + '/' + rule + '.json')
+                    s.loadedLanguages[rule] = require(config.location.languages + '/' + rule + '.json')
                     file = s.loadedLanguages[rule]
                 } catch (err) {
                     file = lang
@@ -150,7 +152,7 @@ s.getDefinitonFile = function(rule) {
         var file = s.loadedDefinitons[file]
         if (!file) {
             try {
-                s.loadedDefinitons[rule] = require(location.definitions + '/' + rule + '.json')
+                s.loadedDefinitons[rule] = require(config.location.definitions + '/' + rule + '.json')
                 file = s.loadedDefinitons[rule]
             } catch (err) {
                 file = definitions
@@ -167,26 +169,6 @@ process.on('SIGINT', ffmpeg.kill.bind(null, { exit: true }));
 s.child_nodes = {};
 s.child_key = '3123asdasdf1dtj1hjk23sdfaasd12asdasddfdbtnkkfgvesra3asdsd3123afdsfqw345';
 
-
-console.log('NODE.JS version : ' + execSync("node -v"))
-    //ffmpeg location
-if (!config.ffmpegDir) {
-    if (ffmpegPath !== false) {
-        config.ffmpegDir = ffmpegPath
-    } else {
-        if (s.isWin === true) {
-            config.ffmpegDir = __dirname + '/ffmpeg/ffmpeg.exe'
-        } else {
-            config.ffmpegDir = 'ffmpeg'
-        }
-    }
-}
-s.ffmpegVersion = execSync(config.ffmpegDir + " -version").toString().split('Copyright')[0].replace('ffmpeg version', '').trim()
-console.log('FFMPEG version : ' + s.ffmpegVersion)
-if (s.ffmpegVersion.indexOf(': 2.') > -1) {
-    logging.systemLog('FFMPEG is too old : ' + s.ffmpegVersion + ', Needed : 3.2+', err)
-    return
-}
 //directories
 s.group = {};
 if (!config.windowsTempDir && s.isWin === true) { config.windowsTempDir = 'C:/Windows/Temp' }
@@ -212,7 +194,7 @@ s.dir = {
     streams: misc.checkCorrectPathEnding(config.streamDir, __dirname),
     fileBin: misc.checkCorrectPathEnding(config.binDir, __dirname),
     addStorage: config.addStorage.map((dir) => { return { name: dir.name, path: misc.checkCorrectPathEnding(dir.path, __dirname) } }),
-    languages: location.languages + '/'
+    languages: config.location.languages + '/'
 };
 
 let dirCheck = (dirs) => {
@@ -334,54 +316,67 @@ s.auth = function(params, cb, res, req) {
                 //no key in memory, query db to see if key exists
                 //check if using username and password in plain text or md5
                 if (params.username && params.username !== '' && params.password && params.password !== '') {
-                    sql.query('SELECT * FROM Users WHERE mail=? AND (pass=? OR pass=?)', [params.username, params.password, misc.md5(params.password)], function(err, r) {
-                        if (r && r[0]) {
-                            r = r[0];
-                            r.ip = '0.0.0.0';
-                            r.auth = misc.gid(20);
-                            params.auth = r.auth;
-                            r.details = JSON.parse(r.details);
-                            r.permissions = {};
-                            s.api[r.auth] = r;
-                            clearAfterTime();
-                            finish(r);
-                        } else {
-                            failed();
-                        }
-                    })
+                    sql.select('*')
+                        .from('Users')
+                        .where('mail', params.username)
+                        .where(() => { this.where('pass', params.password).orWhere('pass', misc.md5(params.password)) })
+                        .asCallback(function(err, rows) {
+                            if (rows && rows[0]) {
+                                rows = rows[0];
+                                rows.ip = '0.0.0.0';
+                                rows.auth = misc.gid(20);
+                                params.auth = rows.auth;
+                                rows.details = JSON.parse(rows.details);
+                                rows.permissions = {};
+                                s.api[rows.auth] = rows;
+                                clearAfterTime();
+                                finish(rows);
+                            } else {
+                                failed();
+                            }
+                        })
                 } else {
                     //not using plain login
-                    sql.query('SELECT * FROM API WHERE code=? AND ke=?', [params.auth, params.ke], function(err, r) {
-                        if (r && r[0]) {
-                            r = r[0];
-                            s.api[params.auth] = { ip: r.ip, uid: r.uid, ke: r.ke, permissions: JSON.parse(r.details), details: {} };
-                            sql.query('SELECT details FROM Users WHERE uid=? AND ke=?', [r.uid, r.ke], function(err, rr) {
-                                if (rr && rr[0]) {
-                                    rr = rr[0];
-                                    try {
-                                        s.api[params.auth].mail = rr.mail
-                                        s.api[params.auth].details = JSON.parse(rr.details)
-                                        s.api[params.auth].lang = s.getLanguageFile(s.api[params.auth].details.lang)
-                                    } catch (er) {}
-                                }
-                                finish(s.api[params.auth]);
-                            })
-                        } else {
-                            sql.query('SELECT * FROM Users WHERE auth=? AND ke=?', [params.auth, params.ke], function(err, r) {
-                                if (r && r[0]) {
-                                    r = r[0];
-                                    r.ip = '0.0.0.0'
-                                    s.api[params.auth] = r
-                                    s.api[params.auth].details = JSON.parse(r.details)
-                                    s.api[params.auth].permissions = {}
-                                    clearAfterTime()
-                                    finish(r)
-                                } else {
-                                    failed();
-                                }
-                            })
-                        }
-                    })
+                    sql.select('*')
+                        .from('API')
+                        .where({ code: params.auth, ke: params.ke })
+                        .asCallback(function(err, rows) {
+                            if (rows && rows[0]) {
+                                rows = rows[0];
+                                s.api[params.auth] = { ip: rows.ip, uid: rows.uid, ke: rows.ke, permissions: JSON.parse(rows.details), details: {} };
+                                sql.select('details')
+                                    .from('Users')
+                                    .where({ uid: rows.uid, ke = rows.ke })
+                                    .asCallback(function(err, rows2) {
+                                        if (rows2 && rows2[0]) {
+                                            rows2 = rows2[0];
+                                            try {
+                                                s.api[params.auth].mail = rows2.mail
+                                                s.api[params.auth].details = JSON.parse(rows2.details)
+                                                s.api[params.auth].lang = s.getLanguageFile(s.api[params.auth].details.lang)
+                                            } catch (er) {}
+                                        }
+                                        finish(s.api[params.auth]);
+                                    })
+                            } else {
+                                sql.select('*')
+                                    .from('Users')
+                                    .where({ auth: params.auth, ke: params.ke })
+                                    .asCallback(function(err, rows) {
+                                        if (rows && rows[0]) {
+                                            rows = rows[0];
+                                            rows.ip = '0.0.0.0'
+                                            s.api[params.auth] = rows
+                                            s.api[params.auth].details = JSON.parse(rows.details)
+                                            s.api[params.auth].permissions = {}
+                                            clearAfterTime()
+                                            finish(rows)
+                                        } else {
+                                            failed();
+                                        }
+                                    })
+                            }
+                        })
                 }
             }
         }
@@ -389,7 +384,7 @@ s.auth = function(params, cb, res, req) {
     //super user authentication handler
 s.superAuth = function(x, callback) {
         req = {};
-        req.super = require(location.super);
+        req.super = require(config.location.super);
         req.super.forEach(function(v, n) {
             if (x.md5 === true) {
                 x.pass = misc.md5(x.pass);
@@ -397,9 +392,12 @@ s.superAuth = function(x, callback) {
             if (x.mail.toLowerCase() === v.mail.toLowerCase() && x.pass === v.pass) {
                 req.found = 1;
                 if (x.users === true) {
-                    sql.query('SELECT * FROM Users WHERE details NOT LIKE ?', ['%"sub"%'], function(err, r) {
-                        callback({ $user: v, users: r, config: config, lang: lang })
-                    })
+                    sql.select('*')
+                        .from('Users')
+                        .whereNot('details', 'like', '%"sub"%')
+                        .asCallback(function(err, rows) {
+                            callback({ $user: v, users: rows, config: config, lang: lang })
+                        })
                 } else {
                     callback({ $user: v, config: config, lang: lang })
                 }

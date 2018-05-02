@@ -970,7 +970,7 @@ s.video = function(x, e, k) {
                                     finish()
                                 }
                             }
-                            deleteVideos()
+                            setTimeout(deleteVideos, 1000);
                         }
                         checkQueue()
                     }

@@ -1,10 +1,9 @@
-var knex = require('knex');
+var logging = require('./log.js')
+var util = require('util');
 
 module.exports = function(vars) {
     let config = vars['config']
-    let logging = vars['logging']
     let location = vars['location']
-    let module = {};
 
 
     var databaseOptions = {
@@ -18,17 +17,43 @@ module.exports = function(vars) {
     if (databaseOptions.client === 'sqlite3' && databaseOptions.connection.filename === undefined) {
         databaseOptions.connection.filename = __dirname + "/shinobi.sqlite"
     }
-    let db = knex(databaseOptions)
+    var knex = require('knex')(databaseOptions)
 
-    module.db = db;
-    module.applySQLUpdates = function() {
+    let addLoggingModule = () => {
+        // Our default SQL logger
+        let sqlLog = winston.transports.SQL = (options) => {
+                var self = this;
+
+                self.name = 'SQL Logger'
+                self.level = options.level || 'info'
+            }
+            // Make our own SQL transport and attach to the sql.log funtion
+        util.inherits(SQL, winston.Transport);
+
+        sqlLog.prototype.log = (level, msg, meta, callback) => {
+            if (!meta.timestamp)
+                meta.timestamp = Date.now();
+
+            if (!meta.type)
+                meta.type = '';
+
+
+
+            knex.table('Logs').insert({ timestamp: meta.timestamp, level: level, type: type, msg: msg });
+            callback(null, true);
+        }
+
+        winston.add(winston.transports.SQL, {})
+    }
+
+    let applySQLUpdates = function() {
         if (databaseOptions.client === 'mysql') {
             if (!db.schema.hasColumn('Videos', 'details'))
                 db.schema.table('Videos', function(table) {
                     table.string('details', 65535).notNullable();
                 })
             else
-                winston.log("Critical update 1/2 already applied. `details` already exists in `Videos`.")
+                logging.log("Critical update 1/2 already applied. `details` already exists in `Videos`.")
 
             if (!db.schema.hasTable('Files'))
                 db.schema.createTable('Files', (table) => {
@@ -40,23 +65,15 @@ module.exports = function(vars) {
                     table.string('details', 65535).notNullable();
                     table.integer('status').defaultTo(0).notNullable();
                 }).catch((e) =>
-                    winston.log({ level: 'error', message: "Critical update 2/2 not applied. " + e.toString() })
+                    logging.log({ level: 'error', message: "Critical update 2/2 not applied. " + e.toString() })
                 )
             else
-                winston.log("Critical update 2/2 already applied. `Files` already exists in `ccio`.")
+                logging.log("Critical update 2/2 already applied. `Files` already exists in `ccio`.")
         }
     }
 
-    module.log = function(level, msg, meta, callback) {
-        if (!meta.timestamp)
-            meta.timestamp = Date.now();
-
-        if (!meta.type)
-            meta.type = '';
-
-        knex.table('Logs').insert({ timestamp: meta.timestamp, level: level, type: type, msg: msg });
-        callback(null, true);
-    }
+    addLoggingModule();
+    applySQLUpdates();
 
     /*module.query = function(query, values, onMoveOn, hideLog) {
         if (!values) { values = [] }
@@ -89,5 +106,5 @@ module.exports = function(vars) {
             })
     }*/
 
-    return module;
+    return knex;
 }
