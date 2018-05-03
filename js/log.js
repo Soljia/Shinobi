@@ -1,17 +1,20 @@
+import { FileController } from '..';
+
 var winston = require('winston')
 
-module.export = (options) => {
+exports.log = winston.log;
+exports.winston = winston;
 
-    let defaultOptions = { useDefaults: true }
-    let actualOptions = Object.assign({}, defaultOptions, options)
 
-    let initDefaults = () => {
-        // Output to console
-        winston.add(winston.transports.Console);
-    }
+let defaultOptions = { useDefaults: true }
+let actualOptions = Object.assign({}, defaultOptions, options)
 
-    if (actualOptions.useDefaults)
-        initDefaults();
-
-    return winston;
+let initDefaults = () => {
+    // Output to console
+    winston.add(winston.transports.Console);
 }
+
+if (actualOptions.useDefaults)
+    initDefaults();
+
+return winston;

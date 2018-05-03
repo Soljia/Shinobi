@@ -1,5 +1,7 @@
-import { FileController, Misc, SQL, Logging, CameraController, Logging, Init } from '../index.js';
+import { Misc, SQL, Logging, CameraController, Logging, Init } from '../index.js';
 var path = require('path');
+
+
 
 
 module.exports = function(vars) {

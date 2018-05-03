@@ -1,11 +1,12 @@
-'use strict';
-import { FileController } from '../index.js';
+import { Logging } from '..';
 var fse = require('fs-extra')
 var path = require('path')
+    /**
+     * @param  {string} filename
+     */
+module.exports.size = (filename) => fse.statSync(filename)["size"]
 
-exports.size = (filename) => fse.statSync(filename)["size"]
-
-exports.delete = (path_, options, callback = false) => {
+module.exports.delete = (path_, options, callback = false) => {
     let defaultOptions = {}
     let actualOptions = Object.assign({}, defaultOptions, options)
 
@@ -26,9 +27,9 @@ exports.delete = (path_, options, callback = false) => {
         fse.remove(path_)
             .then(() => {
                 callback(path_)
-                logging.log("Deleted " + path_)
+                Logging.log("Deleted " + path_)
             })
-            .catch(err => logging.log({
+            .catch(err => Logging.log({
                 level: 'error',
                 message: err
             }))
