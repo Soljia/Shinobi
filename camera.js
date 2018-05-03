@@ -57,7 +57,8 @@ var P2P = require('pipe2pam');
 var PamDiff = require('pam-diff');
 var location = {}
 
-console.log(process.evn.path)
+console.log("Path")
+console.log(process.env.path)
 location.super = __dirname + '/super.json'
 location.config = __dirname + '/conf.json'
 location.languages = __dirname + '/languages'
