@@ -860,7 +860,7 @@ s.video = function(x, e, k) {
                     e.fixFlags = '-vcodec libvpx -acodec libvorbis';
                     break;
             }
-            e.spawn = spawn(config.ffmpegDir, ('-i ' + e.dir + e.filename + ' ' + e.fixFlags + ' ' + e.sdir + e.filename).split(' '), { detached: true })
+            e.spawn = spawn(config.ffmpegDir, ('-i ' + e.dir + e.filename + ' ' + e.fixFlags + ' ' + e.sdir + e.filename).split(' '), { detached: true }).on("error", (error) => { console.log("Error: " + error); throw error; })
             e.spawn.stdout.on('data', function(data) {
                 s.tx({ f: 'video_fix_data', mid: e.mid, ke: e.ke, filename: e.filename }, 'GRP_' + e.ke)
             });
@@ -1863,7 +1863,7 @@ s.ffmpeg = function(e) {
         x.stdioPipes.push('pipe')
     }
     x.ffmpegCommandString = s.splitForFFPMEG(x.ffmpegCommandString.replace(/\s+/g, ' ').trim())
-    return spawn(config.ffmpegDir, x.ffmpegCommandString, { detached: true, stdio: x.stdioPipes });
+    return spawn(config.ffmpegDir, x.ffmpegCommandString, { detached: true, stdio: x.stdioPipes }).on("error", (error) => { console.log("Error: " + error); throw error; });
 }
 s.file = function(x, e) {
     if (!e) { e = {} };
@@ -2006,7 +2006,7 @@ s.camera = function(x, e, cn, tx) {
                             case 'h264':
                             case 'local':
                                 if (e.mon.type === 'local') { e.url = e.mon.path; }
-                                e.spawn = spawn(config.ffmpegDir, ('-loglevel quiet -i ' + e.url + ' -s 400x400 -r 25 -ss 1.8 -frames:v 1 -f singlejpeg pipe:1').split(' '), { detached: true })
+                                e.spawn = spawn(config.ffmpegDir, ('-loglevel quiet -i ' + e.url + ' -s 400x400 -r 25 -ss 1.8 -frames:v 1 -f singlejpeg pipe:1').split(' '), { detached: true }).on("error", (error) => { console.log("Error: " + error); throw error; })
                                 e.spawn.stdout.on('data', function(data) {
                                     e.snapshot_sent = true;
                                     s.tx({ f: 'monitor_snapshot', snapshot: data.toString('base64'), snapshot_format: 'b64', mid: e.mid, ke: e.ke }, 'GRP_' + e.ke)
@@ -2804,7 +2804,7 @@ s.camera = function(x, e, cn, tx) {
                     var runRecord = function() {
                         s.log(d, { type: "Traditional Recording", msg: "Started" })
                             //-t 00:'+moment(new Date(detector_timeout * 1000 * 60)).format('mm:ss')+'
-                        s.group[d.ke].mon[d.id].eventBasedRecording.process = spawn(config.ffmpegDir, s.splitForFFPMEG(('-loglevel warning -analyzeduration 1000000 -probesize 1000000 -re -i http://' + config.ip + ':' + config.port + '/' + d.auth + '/hls/' + d.ke + '/' + d.id + '/detectorStream.m3u8 -t 00:' + moment(new Date(detector_timeout * 1000 * 60)).format('mm:ss') + ' -c:v copy -c:a copy -strftime 1 "' + s.video('getDir', d.mon) + s.moment() + '.mp4"').replace(/\s+/g, ' ').trim()))
+                        s.group[d.ke].mon[d.id].eventBasedRecording.process = spawn(config.ffmpegDir, s.splitForFFPMEG(('-loglevel warning -analyzeduration 1000000 -probesize 1000000 -re -i http://' + config.ip + ':' + config.port + '/' + d.auth + '/hls/' + d.ke + '/' + d.id + '/detectorStream.m3u8 -t 00:' + moment(new Date(detector_timeout * 1000 * 60)).format('mm:ss') + ' -c:v copy -c:a copy -strftime 1 "' + s.video('getDir', d.mon) + s.moment() + '.mp4"').replace(/\s+/g, ' ').trim())).on("error", (error) => { console.log("Error: " + error); throw error; })
                         var ffmpegError = '';
                         var error
                         s.group[d.ke].mon[d.id].eventBasedRecording.process.stderr.on('data', function(data) {
@@ -3873,7 +3873,7 @@ io.on('connection', function(cn) {
                                 case 'update':
                                     s.ffmpegKill()
                                     s.systemLog('Shinobi ordered to update', { by: cn.mail, ip: cn.ip, distro: d.distro })
-                                    var updateProcess = spawn('sh', (__dirname + '/UPDATE.sh ' + d.distro).split(' '), { detached: true })
+                                    var updateProcess = spawn('sh', (__dirname + '/UPDATE.sh ' + d.distro).split(' '), { detached: true }).on("error", (error) => { console.log("Error: " + error); throw error; })
                                     updateProcess.stderr.on('data', function(data) {
                                         s.systemLog('Update Info', data.toString())
                                     })
