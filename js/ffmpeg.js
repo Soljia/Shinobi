@@ -2,9 +2,9 @@ var fs = require('fs');
 const { execSync, exec, spawn } = require('child_process');
 
 module.exports = function(s, config, misc) {
-    let module = {};
+    let output = {};
 
-    module.ffmpeg = function(e) {
+    output.ffmpeg = function(e) {
         //create input map
         var createFFmpegMap = function(arrayOfMaps) {
             //e.details.input_map_choices.stream
@@ -711,12 +711,12 @@ module.exports = function(s, config, misc) {
             x.stdioPipes.push('pipe')
         }
 
-        x.ffmpegCommandString = module.split(x.ffmpegCommandString.replace(/\s+/g, ' ').trim())
+        x.ffmpegCommandString = output.split(x.ffmpegCommandString.replace(/\s+/g, ' ').trim())
         return spawn(config.ffmpegDir, x.ffmpegCommandString, { detached: true, stdio: x.stdioPipes });
     }
 
     //kill any ffmpeg running
-    module.kill = function() {
+    output.kill = function() {
         var cmd = ''
         if (s.isWin === true) {
             cmd = "Taskkill /IM ffmpeg.exe /F"
@@ -726,7 +726,7 @@ module.exports = function(s, config, misc) {
         exec(cmd, { detached: true })
     }
 
-    module.split = function(ffmpegCommandAsString) {
+    output.split = function(ffmpegCommandAsString) {
         //this function ignores spaces inside quotes.
         return ffmpegCommandAsString.match(/\\?.|^$/g).reduce((p, c) => {
             if (c === '"') {
@@ -740,5 +740,5 @@ module.exports = function(s, config, misc) {
         }, { a: [''] }).a
     }
 
-    return module;
+    return output;
 }

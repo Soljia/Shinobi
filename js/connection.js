@@ -13,8 +13,8 @@ module.exports = function(vars) {
     let sql = vars['sql']
     let init = vars['init']
 
-    let module = {};
-    module.init = function(cn) {
+    let output = {};
+    output.init = function(cn) {
         var tx;
         //set "client" detector plugin event function
         cn.on('ocv', function(d) {
@@ -1188,5 +1188,5 @@ module.exports = function(vars) {
             }
         })
     }
-    return module;
+    return output;
 }

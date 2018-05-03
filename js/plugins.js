@@ -1,19 +1,19 @@
 module.exports = function(vars) {
-    let module = {}
+    let output = {}
 
     let connectedPlugins_ = {};
 
-    module.connectedPlugins_ = () => {
+    output.connectedPlugins_ = () => {
         return connectedPlugins_;
     }
 
-    module.addPlugin = (plugin, allowDupes = false) => {
+    output.addPlugin = (plugin, allowDupes = false) => {
         if (!connectedPlugins_.includes(plugin) || allowDupes)
             connectedPlugins_[plugin.id] = { plug: plugin }
     }
 
     //function for receiving detector data
-    module.pluginEventController = function(d) {
+    output.pluginEventController = function(d) {
         switch (d.f) {
             case 'trigger':
                 camera.camera('motion', d)
@@ -101,7 +101,7 @@ module.exports = function(vars) {
         }
     }
 
-    return module;
+    return output;
 }
 
 

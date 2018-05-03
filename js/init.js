@@ -2,9 +2,9 @@ module.exports = function(vars) {
     let misc = vars['misc']
     let sql = vars['sql']
 
-    let module = {};
+    let output = {};
 
-    module.config = (config, ProCallback) => {
+    output.config = (config, ProCallback) => {
         if (config.ip === undefined || config.ip === '' || config.ip.indexOf('0.0.0.0') > -1) { config.ip = 'localhost' } else { config.bindip = config.ip };
 
         if (!config.productType) config.productType = 'CE'
@@ -12,7 +12,7 @@ module.exports = function(vars) {
         if (config.productType === 'Pro') ProCallback();
     }
 
-    module.init = function(x, e, k, fn) {
+    output.init = function(x, e, k, fn) {
         if (!e) { e = {} }
         if (!k) { k = {} }
         switch (x) {
@@ -36,7 +36,7 @@ module.exports = function(vars) {
                 if (!s.group[e.ke].mon[e.mid].started) { s.group[e.ke].mon[e.mid].started = 0 };
                 if (s.group[e.ke].mon[e.mid].delete) { clearTimeout(s.group[e.ke].mon[e.mid].delete) }
                 if (!s.group[e.ke].mon_conf) { s.group[e.ke].mon_conf = {} }
-                module.init('apps', e)
+                output.init('apps', e)
                 break;
             case 'group':
                 if (!s.group[e.ke]) {
@@ -51,7 +51,7 @@ module.exports = function(vars) {
                 //save global used space as megabyte value
                 s.group[e.ke].usedSpace = e.size / 1000000;
                 //emit the changes to connected users
-                module.init('diskUsedEmit', e)
+                output.init('diskUsedEmit', e)
                 break;
             case 'apps':
                 if (!s.group[e.ke].init) {
@@ -91,7 +91,7 @@ module.exports = function(vars) {
                 e.cn = Object.keys(s.child_nodes);
                 e.cn.forEach(function(v) {
                     if (s.group[e.ke]) {
-                        misc.cx({ f: 'sync', sync: module.init('noReference', s.group[e.ke].mon[e.mid]), ke: e.ke, mid: e.mid }, s.child_nodes[v].cnid);
+                        misc.cx({ f: 'sync', sync: output.init('noReference', s.group[e.ke].mon[e.mid]), ke: e.ke, mid: e.mid }, s.child_nodes[v].cnid);
                     }
                 });
                 break;
@@ -157,7 +157,7 @@ module.exports = function(vars) {
                             checkQueue()
                         } else {
                             s.group[e.ke].sizeChanging = false
-                            module.init('diskUsedEmit', e)
+                            output.init('diskUsedEmit', e)
                         }
                     }
                     checkQueue()
@@ -167,5 +167,5 @@ module.exports = function(vars) {
         if (typeof e.callback === 'function') { setTimeout(function() { e.callback() }, 500); }
     }
 
-    return module;
+    return output;
 }

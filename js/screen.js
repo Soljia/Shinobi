@@ -7,12 +7,12 @@ module.exports = function(vars) { //s,config,misc,logging){
     let misc = vars['misc']
     let sql = vars['sql']
     let lang = vars['lang']
-    let module = {};
+    let output = {};
 
     if (config.productType === 'Pro') {
         var LdapAuth = require('ldapauth-fork');
     }
-    module.init = function(req, res) {
+    output.init = function(req, res) {
         req.ip = req.headers['cf-connecting-ip'] || req.headers["CF-Connecting-IP"] || req.headers["'x-forwarded-for"] || req.connection.remoteAddress;
         if (req.query.json == 'true') {
             res.header("Access-Control-Allow-Origin", req.headers.origin);
@@ -325,5 +325,5 @@ module.exports = function(vars) { //s,config,misc,logging){
     }
 
 
-    return module;
+    return output;
 }

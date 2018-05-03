@@ -19,7 +19,7 @@ module.exports = function(vars) {
     let lang = vars['lang']
     let sql = vars['sql']
     let camera = vars['camera']
-    let module = {};
+    let output = {};
 
     //SSL options
     if (config.ssl && config.ssl.key && config.ssl.cert) {
@@ -48,7 +48,7 @@ module.exports = function(vars) {
     });
     io.attach(server);
 
-    module.init = function() {
+    output.init = function() {
         app.enable('trust proxy');
         app.use('/libs', express.static(location.basedir + '/web/libs'));
         app.use(bodyParser.json());
@@ -1445,5 +1445,5 @@ module.exports = function(vars) {
             }, res, req);
         })
     }
-    return module;
+    return output;
 }

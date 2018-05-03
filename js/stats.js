@@ -10,13 +10,13 @@ module.exports = function(vars) {
     let misc = vars['misc']
     let init = vars['init']
     let config = vars['config']
-    let module = {};
+    let output = {};
 
-    module.initDiskMonitor = (timeout = 1500) => {
+    output.initDiskMonitor = (timeout = 1500) => {
         setTimeout(diskUsage, timeout)
     }
 
-    module.init_CPU_Memory_Monitor = (interval = 10000) => {
+    output.init_CPU_Memory_Monitor = (interval = 10000) => {
         setInterval(function() {
             cpuUsage(function(cpu) {
                 ramUsage(function(ram) {
@@ -136,5 +136,5 @@ module.exports = function(vars) {
             }
         })
     }
-    return module;
+    return output;
 }

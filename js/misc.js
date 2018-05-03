@@ -6,24 +6,24 @@ module.exports = function(vars) {
     let s = vars ? vars['s'] : null
     let config = vars ? vars['config'] : null
     let io = vars ? vars['io'] : null
-    let module = {};
+    let output = {};
 
-    module.checkRelativePath = function(path, dirname = __dirname) {
+    output.checkRelativePath = function(path, dirname = __dirname) {
         if (path.charAt(0) !== '/') {
             path = dirname + '/' + path
         }
         return path
     }
-    module.checkCorrectPathEnding = function(path, dirname = __dirname) {
+    output.checkCorrectPathEnding = function(path, dirname = __dirname) {
         var length = path.length
         if (path.charAt(length - 1) !== '/') {
             path = path + '/'
         }
         return path.replace('__DIR__', dirname)
     }
-    module.md5 = function(x) { return crypto.createHash('md5').update(x).digest("hex"); }
+    output.md5 = function(x) { return crypto.createHash('md5').update(x).digest("hex"); }
         //send data to detector plugic n
-    module.ocvTx = function(data) {
+    output.ocvTx = function(data) {
             if (!s.ocv) { return }
             if (s.ocv.isClientPlugin === true) {
                 tx(data, s.ocv.id)
@@ -32,7 +32,7 @@ module.exports = function(vars) {
             }
         }
         //send data to socket client function
-    module.tx = function(z, y, x) {
+    output.tx = function(z, y, x) {
             if (x) {
                 return x.broadcast.to(y).emit('f', z)
             };
@@ -42,13 +42,13 @@ module.exports = function(vars) {
                 io.emit('f', z);
         }
         //send data to child node function (experimental)
-    module.cx = function(z, y, x) {
+    output.cx = function(z, y, x) {
         if (x) {
             return x.broadcast.to(y).emit('c', z)
         };
         io.to(y).emit('c', z);
     }
-    module.txWithSubPermissions = function(z, y, permissionChoices) {
+    output.txWithSubPermissions = function(z, y, permissionChoices) {
             if (typeof permissionChoices === 'string') {
                 permissionChoices = [permissionChoices]
             }
@@ -77,17 +77,17 @@ module.exports = function(vars) {
             }
         }
         //load camera controller vars
-    module.nameToTime = function(x) {
+    output.nameToTime = function(x) {
         x = x.split('.')[0].split('T'), x[1] = x[1].replace(/-/g, ':');
         x = x.join(' ');
         return x;
     }
-    module.ratio = function(width, height, ratio) { ratio = width / height; return (Math.abs(ratio - 4 / 3) < Math.abs(ratio - 16 / 9)) ? '4:3' : '16:9'; }
-    module.randomNumber = function(x) {
+    output.ratio = function(width, height, ratio) { ratio = width / height; return (Math.abs(ratio - 4 / 3) < Math.abs(ratio - 16 / 9)) ? '4:3' : '16:9'; }
+    output.randomNumber = function(x) {
         if (!x) { x = 10 };
         return Math.floor((Math.random() * x) + 1);
     };
-    module.gid = function(x) {
+    output.gid = function(x) {
         if (!x) { x = 10 };
         var t = "";
         var p = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -95,7 +95,7 @@ module.exports = function(vars) {
             t += p.charAt(Math.floor(Math.random() * p.length));
         return t;
     };
-    module.nid = function(x) {
+    output.nid = function(x) {
         if (!x) { x = 6 };
         var t = "";
         var p = "0123456789";
@@ -103,19 +103,19 @@ module.exports = function(vars) {
             t += p.charAt(Math.floor(Math.random() * p.length));
         return t;
     };
-    module.moment_withOffset = function(e, x) {
+    output.moment_withOffset = function(e, x) {
         if (!e) { e = new Date };
         if (!x) { x = 'YYYY-MM-DDTHH-mm-ss' };
         e = moment(e);
         if (config.utcOffset) { e = e.utcOffset(config.utcOffset) }
         return e.format(x);
     }
-    module.moment = function(e, x) {
+    output.moment = function(e, x) {
         if (!e) { e = new Date };
         if (!x) { x = 'YYYY-MM-DDTHH-mm-ss' };
         return moment(e).format(x);
     }
-    module.ipRange = function(start_ip, end_ip) {
+    output.ipRange = function(start_ip, end_ip) {
         var start_long = s.toLong(start_ip);
         var end_long = s.toLong(end_ip);
         if (start_long > end_long) {
@@ -130,7 +130,7 @@ module.exports = function(vars) {
         }
         return range_array;
     }
-    module.portRange = function(lowEnd, highEnd) {
+    output.portRange = function(lowEnd, highEnd) {
             var list = [];
             for (var i = lowEnd; i <= highEnd; i++) {
                 list.push(i);
@@ -138,7 +138,7 @@ module.exports = function(vars) {
             return list;
         }
         //toLong taken from NPM package 'ip'
-    module.toLong = function(ip) {
+    output.toLong = function(ip) {
         var ipl = 0;
         ip.split('.').forEach(function(octet) {
             ipl <<= 8;
@@ -147,13 +147,13 @@ module.exports = function(vars) {
         return (ipl >>> 0);
     };
     //fromLong taken from NPM package 'ip'
-    module.fromLong = function(ipl) {
+    output.fromLong = function(ipl) {
         return ((ipl >>> 24) + '.' +
             (ipl >> 16 & 255) + '.' +
             (ipl >> 8 & 255) + '.' +
             (ipl & 255));
     };
-    module.createPamDiffRegionArray = function(regions, globalSensitivity, fullFrame) {
+    output.createPamDiffRegionArray = function(regions, globalSensitivity, fullFrame) {
         var pamDiffCompliantArray = [],
             arrayForOtherStuff = [],
             json
@@ -181,7 +181,7 @@ module.exports = function(vars) {
         if (pamDiffCompliantArray.length === 0) { pamDiffCompliantArray = null }
         return { forPam: pamDiffCompliantArray, notForPam: arrayForOtherStuff };
     }
-    module.getRequest = function(url, callback) {
+    output.getRequest = function(url, callback) {
         return http.get(url, function(res) {
             var body = '';
             res.on('data', function(chunk) {
@@ -195,7 +195,7 @@ module.exports = function(vars) {
             //                              s.systemLog("Get Snapshot Error", e);
         });
     }
-    module.kill = function(x, group, id) {
+    output.kill = function(x, group, id) {
             let mon = group.mon[id];
             if (mon && mon && mon.spawn !== undefined) {
                 if (mon.spawn) {
@@ -241,7 +241,7 @@ module.exports = function(vars) {
             }
         }
         //user log
-    module.log = function(e, x) {
+    output.log = function(e, x) {
             if (!x || !e.mid) { return }
             if ((e.details && e.details.sqllog === '1') || e.mid.indexOf('$') > -1) {
                 s.sqlQuery('INSERT INTO Logs (ke,mid,info) VALUES (?,?,?)', [e.ke, e.mid, s.s(x)]);
@@ -250,7 +250,7 @@ module.exports = function(vars) {
             //    s.systemLog('s.log : ',{f:'log',ke:e.ke,mid:e.mid,log:x,time:moment()},'GRP_'+e.ke)
         }
         //system log
-    module.systemLog = function(q, w, e) {
+    output.systemLog = function(q, w, e) {
         if (!w) { w = '' }
         if (!e) { e = '' }
         if (config.systemLog === true) {
@@ -262,7 +262,7 @@ module.exports = function(vars) {
         }
     }
 
-    module.ipInConfig = function(ip, config) {
+    output.ipInConfig = function(ip, config) {
         // Default to a false return
         let result = false;
 
@@ -284,5 +284,5 @@ module.exports = function(vars) {
         return result;
     }
 
-    return module;
+    return output;
 }

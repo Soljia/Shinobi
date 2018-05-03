@@ -17,9 +17,9 @@ module.exports = function(vars) {
     let nodemailer = vars['nodemailer']
     let ffmpeg = vars['ffmpeg']
     let init = vars['init']
-    let module = {};
+    let output = {};
 
-    module.camera = function(x, e, cn) {
+    output.camera = function(x, e, cn) {
         if (x !== 'motion') {
             var ee = init.init('noReference', e);
 
@@ -284,7 +284,7 @@ module.exports = function(vars) {
             case 'record_off': //stop recording and start
                 if (!s.group[e.ke].mon[e.id].record) { s.group[e.ke].mon[e.id].record = {} }
                 s.group[e.ke].mon[e.id].record.yes = 0;
-                module.camera('start', e);
+                output.camera('start', e);
                 break;
             case 'watch_on': //live streamers - join
                 //            if(s.group[e.ke].mon[e.id].watch[cn.id]){module.camera('watch_off',e,cn,tx);return}
@@ -316,9 +316,9 @@ module.exports = function(vars) {
                 misc.tx({ viewers: e.ob, ke: e.ke, id: e.id }, 'MON_' + e.id);
                 break;
             case 'restart': //restart monitor
-                module.camera('stop', e)
+                output.camera('stop', e)
                 setTimeout(function() {
-                    module.camera(e.mode, e)
+                    output.camera(e.mode, e)
                 }, 1300)
                 break;
             case 'idle':
@@ -352,7 +352,7 @@ module.exports = function(vars) {
                 s.group[e.ke].mon[e.id].started = 0;
                 if (s.group[e.ke].mon[e.id].record) { s.group[e.ke].mon[e.id].record.yes = 0 }
                 misc.tx({ f: 'monitor_stopping', mid: e.id, ke: e.ke, time: misc.moment() }, 'GRP_' + e.ke);
-                module.camera('snapshot', { mid: e.id, ke: e.ke, mon: e })
+                output.camera('snapshot', { mid: e.id, ke: e.ke, mon: e })
                 if (x === 'stop') {
                     logging.log(e, { type: lang['Monitor Stopped'], msg: lang.MonitorStoppedText });
                     clearTimeout(s.group[e.ke].mon[e.id].delete)
@@ -493,7 +493,7 @@ module.exports = function(vars) {
                         resetStreamCheck()
                     })
                 }
-                module.camera('snapshot', { mid: e.id, ke: e.ke, mon: e })
+                output.camera('snapshot', { mid: e.id, ke: e.ke, mon: e })
                     //check host to see if has password and user in it
                 e.hosty = e.host.split('@');
                 if (e.hosty[1]) { e.hosty = e.hosty[1]; } else { e.hosty = e.hosty[0]; };
@@ -504,7 +504,7 @@ module.exports = function(vars) {
                     if (s.group[e.ke].mon[e.id].started === 1) {
                         s.group[e.ke].mon[e.id].err_fatal_timeout = setTimeout(function() {
                             if (e.details.fatal_max !== 0 && e.error_fatal_count > e.details.fatal_max) {
-                                module.camera('stop', { id: e.id, ke: e.ke })
+                                output.camera('stop', { id: e.id, ke: e.ke })
                             } else {
                                 e.fn()
                             };
@@ -616,10 +616,10 @@ module.exports = function(vars) {
                                                             ++s.group[e.ke].mon[e.id].error_socket_timeout_count
                                                             if (e.details.fatal_max !== 0 && s.group[e.ke].mon[e.id].error_socket_timeout_count > e.details.fatal_max) {
                                                                 logging.log(e, { type: lang['Fatal Maximum Reached'], msg: { code: 'ESOCKETTIMEDOUT', msg: lang.FatalMaximumReachedText } });
-                                                                module.camera('stop', e)
+                                                                output.camera('stop', e)
                                                             } else {
                                                                 logging.log(e, { type: lang['Restarting Process'], msg: { code: 'ESOCKETTIMEDOUT', msg: lang.FatalMaximumReachedText } });
-                                                                module.camera('restart', e)
+                                                                output.camera('restart', e)
                                                             }
                                                             return;
                                                             break;
@@ -696,7 +696,7 @@ module.exports = function(vars) {
                                                 if (s.group[e.ke].init.aws_s3_save == "1") {
                                                     s.queueS3pushRequest(Object.assign({}, detectorObject))
                                                 }
-                                                module.camera('motion', detectorObject)
+                                                output.camera('motion', detectorObject)
                                             }
                                             var filterTheNoise = function(trigger) {
                                                 if (noiseFilterArray[trigger.name].length > 2) {
@@ -1195,5 +1195,5 @@ module.exports = function(vars) {
         if (typeof cn === 'function') { setTimeout(function() { cn() }, 1000); }
     }
 
-    return module;
+    return output;
 }
