@@ -19,6 +19,7 @@ try {
     if (!fs.existsSync(ffmpegPath)) {
         console.log('"ffmpeg-static" from NPM has failed to provide a compatible library or has been corrupted.')
         console.log('You may need to install FFmpeg manually or you can try running "npm uninstall ffmpeg-static && npm install ffmpeg-static".')
+        ffmpegPath = false;
     }
 } catch (err) {
     ffmpegPath = false;
