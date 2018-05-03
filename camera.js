@@ -58,7 +58,7 @@ var PamDiff = require('pam-diff');
 var location = {}
 
 console.log("Path")
-console.log(process.env.path)
+console.log(process.env.PATH)
 location.super = __dirname + '/super.json'
 location.config = __dirname + '/conf.json'
 location.languages = __dirname + '/languages'
