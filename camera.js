@@ -56,6 +56,8 @@ var Mp4Frag = require('mp4frag');
 var P2P = require('pipe2pam');
 var PamDiff = require('pam-diff');
 var location = {}
+
+console.log(process.evn.path)
 location.super = __dirname + '/super.json'
 location.config = __dirname + '/conf.json'
 location.languages = __dirname + '/languages'
@@ -311,11 +313,15 @@ s.ocvTx = function(data) {
         }
     }
     //send data to socket client function
-s.tx = function(z, y, x) { if (x) { return x.broadcast.to(y).emit('f', z) };
-        io.to(y).emit('f', z); }
+s.tx = function(z, y, x) {
+        if (x) { return x.broadcast.to(y).emit('f', z) };
+        io.to(y).emit('f', z);
+    }
     //send data to child node function (experimental)
-s.cx = function(z, y, x) { if (x) { return x.broadcast.to(y).emit('c', z) };
-    io.to(y).emit('c', z); }
+s.cx = function(z, y, x) {
+    if (x) { return x.broadcast.to(y).emit('c', z) };
+    io.to(y).emit('c', z);
+}
 s.txWithSubPermissions = function(z, y, permissionChoices) {
         if (typeof permissionChoices === 'string') {
             permissionChoices = [permissionChoices]
@@ -345,8 +351,11 @@ s.txWithSubPermissions = function(z, y, permissionChoices) {
         }
     }
     //load camera controller vars
-s.nameToTime = function(x) { x = x.split('.')[0].split('T'), x[1] = x[1].replace(/-/g, ':');
-    x = x.join(' '); return x; }
+s.nameToTime = function(x) {
+    x = x.split('.')[0].split('T'), x[1] = x[1].replace(/-/g, ':');
+    x = x.join(' ');
+    return x;
+}
 s.ratio = function(width, height, ratio) { ratio = width / height; return (Math.abs(ratio - 4 / 3) < Math.abs(ratio - 16 / 9)) ? '4:3' : '16:9'; }
 s.randomNumber = function(x) {
     if (!x) { x = 10 };
@@ -491,8 +500,10 @@ s.kill = function(x, e, p) {
                 p = x.pid;
                 if (s.group[e.ke].mon_conf[e.id].type === ('dashcam' || 'socket' || 'jpeg' || 'pipe')) {
                     x.stdin.pause();
-                    setTimeout(function() { x.kill('SIGTERM');
-                        delete(x); }, 500)
+                    setTimeout(function() {
+                        x.kill('SIGTERM');
+                        delete(x);
+                    }, 500)
                 } else {
                     try {
                         x.stdin.setEncoding('utf8');
@@ -2074,12 +2085,18 @@ s.camera = function(x, e, cn, tx) {
                 s.group[e.ke].mon[e.id].eventBasedRecording.allowEnd = true;
                 s.group[e.ke].mon[e.id].eventBasedRecording.process.kill('SIGTERM');
             }
-            if (s.group[e.ke].mon[e.id].fswatch) { s.group[e.ke].mon[e.id].fswatch.close();
-                delete(s.group[e.ke].mon[e.id].fswatch) }
-            if (s.group[e.ke].mon[e.id].fswatchStream) { s.group[e.ke].mon[e.id].fswatchStream.close();
-                delete(s.group[e.ke].mon[e.id].fswatchStream) }
-            if (s.group[e.ke].mon[e.id].open) { ee.filename = s.group[e.ke].mon[e.id].open, ee.ext = s.group[e.ke].mon[e.id].open_ext;
-                s.video('close', ee) }
+            if (s.group[e.ke].mon[e.id].fswatch) {
+                s.group[e.ke].mon[e.id].fswatch.close();
+                delete(s.group[e.ke].mon[e.id].fswatch)
+            }
+            if (s.group[e.ke].mon[e.id].fswatchStream) {
+                s.group[e.ke].mon[e.id].fswatchStream.close();
+                delete(s.group[e.ke].mon[e.id].fswatchStream)
+            }
+            if (s.group[e.ke].mon[e.id].open) {
+                ee.filename = s.group[e.ke].mon[e.id].open, ee.ext = s.group[e.ke].mon[e.id].open_ext;
+                s.video('close', ee)
+            }
             if (s.group[e.ke].mon[e.id].last_frame) { delete(s.group[e.ke].mon[e.id].last_frame) }
             if (s.group[e.ke].mon[e.id].started !== 1) { return }
             s.kill(s.group[e.ke].mon[e.id].spawn, e);
@@ -2346,8 +2363,10 @@ s.camera = function(x, e, cn, tx) {
                                                 e.buffer0 = null;
                                             }
                                             if (!e.timeOut) {
-                                                e.timeOut = setTimeout(function() { e.error_count = 0;
-                                                    delete(e.timeOut); }, 3000);
+                                                e.timeOut = setTimeout(function() {
+                                                    e.error_count = 0;
+                                                    delete(e.timeOut);
+                                                }, 3000);
                                             }
 
                                         }).on('error', function(err) {
@@ -2614,8 +2633,10 @@ s.camera = function(x, e, cn, tx) {
                                             case e.chk('Connection refused'):
                                             case e.chk('Connection timed out'):
                                                 //restart
-                                                setTimeout(function() { s.log(e, { type: lang["Can't Connect"], msg: lang['Retrying...'] });
-                                                    e.error_fatal(); }, 1000)
+                                                setTimeout(function() {
+                                                    s.log(e, { type: lang["Can't Connect"], msg: lang['Retrying...'] });
+                                                    e.error_fatal();
+                                                }, 1000)
                                                 break;
                                                 //                                        case e.chk('No such file or directory'):
                                                 //                                        case e.chk('Unable to open RTSP for listening'):
@@ -3229,10 +3250,14 @@ io.on('connection', function(cn) {
     cn.on('f', function(d) {
         if (!cn.ke && d.f === 'init') { //socket login
             cn.ip = cn.request.connection.remoteAddress;
-            tx = function(z) { if (!z.ke) { z.ke = cn.ke; };
-                cn.emit('f', z); }
-            d.failed = function() { tx({ ok: false, msg: 'Not Authorized', token_used: d.auth, ke: d.ke });
-                cn.disconnect(); }
+            tx = function(z) {
+                if (!z.ke) { z.ke = cn.ke; };
+                cn.emit('f', z);
+            }
+            d.failed = function() {
+                tx({ ok: false, msg: 'Not Authorized', token_used: d.auth, ke: d.ke });
+                cn.disconnect();
+            }
             d.success = function(r) {
                 r = r[0];
                 cn.join('GRP_' + d.ke);
@@ -4082,8 +4107,10 @@ io.on('connection', function(cn) {
         })
         //embed functions
     cn.on('e', function(d) {
-        tx = function(z) { if (!z.ke) { z.ke = cn.ke; };
-            cn.emit('f', z); }
+        tx = function(z) {
+            if (!z.ke) { z.ke = cn.ke; };
+            cn.emit('f', z);
+        }
         switch (d.f) {
             case 'init':
                 if (!s.group[d.ke] || !s.group[d.ke].mon[d.id] || s.group[d.ke].mon[d.id].started === 0) { return false }
@@ -4764,8 +4791,10 @@ app.get('/:auth/jpeg/:ke/:id/s.jpg', function(req, res) {
             'Cache-Control': 'no-cache',
             'Pragma': 'no-cache'
         });
-        res.on('finish', function() { res.end();
-            delete(res) });
+        res.on('finish', function() {
+            res.end();
+            delete(res)
+        });
         if (fs.existsSync(req.dir)) {
             fs.createReadStream(req.dir).pipe(res);
         } else {
@@ -5562,8 +5591,11 @@ app.get(['/:auth/monitor/:ke/:id/:f', '/:auth/monitor/:ke/:id/:f/:ff', '/:auth/m
                 res.end(user.lang['Not Permitted'])
                 return
             }
-            if (req.params.f === '') { req.ret.msg = user.lang.monitorGetText1;
-                res.end(s.s(req.ret, null, 3)); return }
+            if (req.params.f === '') {
+                req.ret.msg = user.lang.monitorGetText1;
+                res.end(s.s(req.ret, null, 3));
+                return
+            }
             if (req.params.f !== 'stop' && req.params.f !== 'start' && req.params.f !== 'record') {
                 req.ret.msg = 'Mode not recognized.';
                 res.end(s.s(req.ret, null, 3));
