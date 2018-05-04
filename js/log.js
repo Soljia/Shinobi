@@ -3,6 +3,7 @@ import { FileController } from '..';
 var winston = require('winston');
 
 module.exports.log = winston.log;
+module.exports.error = (message) => winston.log({level: 'error', message:message});
 module.exports.winston = winston;
 
 let actualOptions = Object.assign({}, defaultOptions, options);

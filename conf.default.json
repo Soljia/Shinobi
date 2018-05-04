@@ -25,10 +25,17 @@
     },
     "logging": {
         "console": {
+            "enabled": true,
             "level": "info"
         },
         "sql": {
+            "enabled": true,
             "level": "error"
+        }
+    },
+    "FileController":{
+        "delete":{
+            "GroupDeletes":false
         }
     },
     "#Comment": "Allowed IPs are defaulted to all private subnets, and loopback address. There are no defined IPv6 private addresses, so you will need to put your own IPv6 subnet.",

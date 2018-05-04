@@ -89,17 +89,21 @@ CREATE TABLE IF NOT EXISTS `Users` (
 -- Data exporting was unselected.
 -- Dumping structure for table ccio.Videos
 CREATE TABLE IF NOT EXISTS `Videos` (
-  `mid` varchar(50) DEFAULT NULL,
-  `ke` varchar(50) DEFAULT NULL,
-  `ext` enum('webm','mp4') DEFAULT NULL,
-  `time` timestamp NULL DEFAULT NULL,
-  `duration` float DEFAULT NULL,
-  `size` float DEFAULT NULL,
-  `frames` int(11) DEFAULT NULL,
-  `end` timestamp NULL DEFAULT NULL,
+  `id` varchar(50) DEFAULT NULL,
+  `startDate` timestamp NULL DEFAULT NULL
+  `endDate` timestamp NULL DEFAULT NULL,
   `status` int(1) DEFAULT '0' COMMENT '0:Building,1:Complete,2:Read,3:Archive',
-  `details` text
+  `details` text,
+  `fileid` varchar(50) 
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+        this.id = '';
+        this.startDate = new Date();
+        this.endDate = new Date();
+        this.status = 0;
+        this.details = '';
+        this.videoInfo = {};
+        this.file = new File();
 
 -- Data exporting was unselected.
 /*!40101 SET SQL_MODE=IFNULL(@OLD_SQL_MODE, '') */;

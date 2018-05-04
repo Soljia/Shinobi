@@ -1,9 +1,6 @@
 import { Misc, SQL, Logging, CameraController, Init, FileController } from '../index.js';
 var path = require('path');
 
-FileController.
-
-
 module.exports = function(vars) {
     let s = vars['s']
     let output = {}
@@ -330,4 +327,21 @@ module.exports = function(vars) {
     }
 
     return output;
+}
+
+class Video {
+    constructor(){
+        this.id = '';
+        this.startDate = new Date();
+        this.endDate = new Date();
+        this.status = 0;
+        this.details = '';
+        this.videoInfo = {};
+        this.file = new File();
+    }
+
+    getVideoInfo(callback) {
+        //Insert ffprobe info here to get video info
+    }
+
 }
