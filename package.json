@@ -5,6 +5,7 @@
     "main": "camera.js",
     "typings": "./dist/index.d.ts",
     "scripts": {
+        "pretest": "eslint --ignore-path .gitignore .",
         "test": "echo \"Error: no test specified\" && exit 1",
         "start": "chmod +x INSTALL/start.sh && INSTALL/start.sh"
     },
@@ -18,11 +19,14 @@
     },
     "homepage": "https://github.com/moeiscool/Shinobi#readme",
     "dependencies": {
+        "babel-eslint": "^8.2.3",
         "body-parser": "^1.15.2",
         "chokidar": "^2.0.3",
         "circular-json": "0.3.1",
         "connection-tester": "^0.1.1",
         "ejs": "^2.5.5",
+        "eslint-config-defaults": "^9.0.0",
+        "eslint-plugin-react": "^7.7.0",
         "express": "^4.14.0",
         "ffmpeg-static": "^2.3.0",
         "find": "^0.2.9",
@@ -47,5 +51,8 @@
         "webdav": "^0.3.1",
         "winston": "^2.4.2"
     },
-    "devDependencies": {}
+    "devDependencies": {
+        "eslint": "^4.19.1",
+        "eslint-config-strongloop": "^2.1.0"
+    }
 }

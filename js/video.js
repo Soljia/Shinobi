@@ -1,7 +1,7 @@
-import { Misc, SQL, Logging, CameraController, Logging, Init } from '../index.js';
+import { Misc, SQL, Logging, CameraController, Init, FileController } from '../index.js';
 var path = require('path');
 
-
+FileController.
 
 
 module.exports = function(vars) {
@@ -41,14 +41,13 @@ module.exports = function(vars) {
             case 'getDir':
                 if (e.mid && !e.id) { e.id = e.mid };
                 if (e.details && (e.details instanceof Object) === false) {
-                    try { e.details = JSON.parse(e.details) } catch (err) {}
+                    try { e.details = JSON.parse(e.details) } catch (err) { Logging.log(err) }
                 }
                 if (e.details && e.details.dir && e.details.dir !== '') {
                     return Misc.checkCorrectPathEnding(e.details.dir) + e.ke + '/' + e.id + '/'
                 } else {
                     return s.dir.videos + e.ke + '/' + e.id + '/';
                 }
-                break;
         }
         if (!k) k = {};
         if (x !== 'getDir') { e.dir = output.video('getDir', e) }
@@ -297,7 +296,7 @@ module.exports = function(vars) {
                     //            });
                     //          });
                     //        }
-                    if (s.group[e.ke].webdav && s.group[e.ke].init.use_webdav !== '0' && s.group[e.ke].init.webdav_save == "1") {
+                    if (s.group[e.ke].webdav && s.group[e.ke].init.use_webdav !== '0' && s.group[e.ke].init.webdav_save === "1") {
                         fs.readFile(k.dir + k.file, function(err, data) {
                             s.group[e.ke].webdav.putFileContents(s.group[e.ke].init.webdav_dir + e.ke + '/' + e.mid + '/' + k.file, "binary", data)
                                 .catch(function(err) {
