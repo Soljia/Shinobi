@@ -250,7 +250,11 @@ s.filterEvents = function(x, d) {
             break;
         case 'delete':
             d.videos.forEach(function(v, n) {
-                video.fn('delete', v)
+                VideoController.delete(v,{},(error, data) => {
+                    Misc.tx({ f: 'video_delete', filename: filename, mid: video.mid, ke: video.ke, time: Misc.nameToTime(filename), end: Misc.moment(new Date, 'YYYY-MM-DD HH:mm:ss') }, 'GRP_' + video.ke);
+                })
+
+                //video.fn('delete', v)
             })
             break;
         case 'execute':

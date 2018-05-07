@@ -35,8 +35,18 @@
     },
     "FileController":{
         "delete":{
-            "GroupDeletes":false
+            "GroupCallbacks":false,
+            "By":"id"
         }
+    },
+    "VideoController":{
+        "delete":{
+            "Callback":{
+                "Group": false,
+                "AfterDelete":false
+            },
+            "By":"id"
+        }  
     },
     "#Comment": "Allowed IPs are defaulted to all private subnets, and loopback address. There are no defined IPv6 private addresses, so you will need to put your own IPv6 subnet.",
     "config.allowedIPs": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.1", "::ffff:127.0.0.1"],

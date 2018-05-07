@@ -5,30 +5,41 @@ module.exports = function(vars) {
     let s = vars['s']
     let output = {}
 
-    output.delete = (video, callback) => {
-        if (!video.filename && video.time) { video.filename = Misc.moment(video.time) }
-        var filename = video.filename + video.filename.indexOf('.') === -1 ? '.' + video.ext : ''
+    output.delete = (video, options, callback) => {
+        // Default where
+        let where = (builder) => builder.where(options.By, video);
 
-        video.status = video.status || 0;
-
-        SQL.select('*').from('Videos').where({ mid: video.mid, ke: video.ke, time: Misc.nameToTime(filename) }).asCallback(
-            (error, rows) => {
-                if (rows && rows[0]) {
-                    rows = rows[0]
-                    var dir = output.video('getDir', rows)
-                    SQL('Videos').where({ mid: video.mid, ke: video.ke, time: Misc.nameToTime(filename) }).del().then(function() {
-                        fs.stat(dir + filename, function(err, file) {
-                            if (err) {
-                                winston.log({ level: 'error', message: "File Delete Error (" + video.ke + ":" + video.mid + ") " + err.toString() })
-                                Logging.systemLog('File Delete Error : ' + video.ke + ' : ' + ' : ' + video.mid, err)
-                            }
-                            Init.init('diskUsedSet', video, -(rows.size / 1000000))
-                        })
-                        Misc.tx({ f: 'video_delete', filename: filename, mid: video.mid, ke: video.ke, time: Misc.nameToTime(filename), end: Misc.moment(new Date, 'YYYY-MM-DD HH:mm:ss') }, 'GRP_' + video.ke);
-                        FileController.delete(path.join(dir, filename))
-
-                    })
+        // Get options
+        options = Object.assign({},config.video.delete,options);
+        
+        // If video is of type Video
+        if(Video.isVideo(video))
+            // Where statement will delete this specific id
+            where = (builder) => builder.where(options.By, video[options.By])
+        // If video is of type Array
+        if(Array.isArray(video)) {
+                // If Group option is set for delete function
+                if(options.Callback.Group)
+                    // Build where statement to delete all id's in array
+                    where = (builder) => builder.whereIn(options.By, video.map((value) => video[options.By]))
+                else{
+                    // Delete videos one by one, calling back each time
+                    returnvideo.forEach((item,index,array) => output.delete(item, options, callback));
                 }
+        }
+
+        SQL.select('*')
+          .from('Video')
+          .where(where)
+          .on('query-error', function(error, obj) {
+            Logging.error(error);
+          })
+          .asCallback((error, rows) => {
+                SQL('Video').where(where).del().then(function() {
+                    if(!options.Callback.AfterDelete)
+                        callback({}, true);
+                    FileController.deleteByID(rows.map((value) =>  value.fileID)), {}, (error, data) => {if(options.Callback.AfterDelete) callback(error,data)})
+                })
             }
         );
     }
@@ -330,18 +341,27 @@ module.exports = function(vars) {
 }
 
 class Video {
-    constructor(){
+    constructor(obj = {}){
         this.id = '';
         this.startDate = new Date();
         this.endDate = new Date();
         this.status = 0;
         this.details = '';
         this.videoInfo = {};
-        this.file = new File();
+        this.fileID = '';
+        Object.assign(this,obj);
+    }
+
+    getFile(){
+      return new File(SQL.getByID(this.fileID));
     }
 
     getVideoInfo(callback) {
         //Insert ffprobe info here to get video info
     }
 
+}
+
+Video.prototype.isVideo = (input) => {
+    return typeof input === 'Video';
 }

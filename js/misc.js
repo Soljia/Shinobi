@@ -14,6 +14,11 @@ module.exports = function(vars) {
         }
         return path
     }
+
+    output.isFunction = (input) => {
+        return input && typeof input === 'function';
+    }
+    
     output.checkCorrectPathEnding = function(path, dirname = __dirname) {
         var length = path.length
         if (path.charAt(length - 1) !== '/') {

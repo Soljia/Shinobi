@@ -19,6 +19,16 @@ module.exports = function(vars) {
     }
     var knex = require('knex')(databaseOptions)
 
+    let getByID = (objType, id, select = '*', callback) => {
+        if(objType !== null && typeof objType === 'object') objType = typeof objType
+        knex.select(select)
+                    .from(objType)
+                    .where({id: id})
+                    .asCallback((err, rows) => {
+                        if(typeof callback === 'function') callback(rows[0])
+                    })
+    }
+
     let addLoggingModule = () => {
         // Our default SQL logger
         let sqlLog = winston.transports.SQL = (options) => {
